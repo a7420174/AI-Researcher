@@ -93,7 +93,7 @@ def return_paper_log_file():
     return PAPER_LOG
 
 def return_paper_log():
-    logs_dir = os.path.join(os.path.dirname(__file__), "paper_agent", "paper_logs")
+    logs_dir = os.path.join(BASE_DIR, "paper_agent", "paper_logs")
     os.makedirs(logs_dir, exist_ok=True)
 
     # Alternative path example (kept as reference)
