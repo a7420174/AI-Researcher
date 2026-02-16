@@ -1597,7 +1597,7 @@ def main():
             os.path.join(BASE_DIR, "paper_agent"),
         ]
         app.launch(
-            share=True, 
+            share=False, 
             server_port=7039,
             server_name="127.0.0.1",
             allowed_paths=allowed_paths,
