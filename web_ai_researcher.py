@@ -1358,7 +1358,7 @@ def create_ui():
                     placeholder="Please enter your questions...",
                     label="Prompt",
                     elem_id="question_input",
-                    show_copy_button=True,
+                    # show_copy_button=True,
                     # elem_classes="scrolling-textbox",
                     value="Write a hello world python file and save it in local file",
                 )
@@ -1369,7 +1369,7 @@ def create_ui():
                     placeholder="Please enter your reference papers...",
                     label="Reference",
                     elem_id="reference_input",
-                    show_copy_button=True,
+                    # show_copy_button=True,
                     # elem_classes="scrolling-textbox",
                     value="1. Attention is all you need. ",
                 )
@@ -1493,7 +1493,7 @@ def create_ui():
                                             "html",
                                         ],  # Set the last column as HTML type to support links
                                         row_count=10,  # Increase row count to allow adding new variables
-                                        col_count=(3, "fixed"),
+                                        column_count=(3, "fixed"),
                                         value=update_env_table,
                                         label="API Keys and Environment Variables",
                                         interactive=True,  # Set as interactive, allowing direct editing
