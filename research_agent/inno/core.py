@@ -40,13 +40,13 @@ import re
 # litellm.num_retries = 3
 
 def should_retry_error(retry_state: RetryCallState):
-    """检查是否应该重试错误
+    """Check whether the error should be retried.
     
     Args:
-        retry_state: RetryCallState对象，包含重试状态信息
+        retry_state: RetryCallState object containing retry status information.
         
     Returns:
-        bool: 是否应该重试
+        bool: Whether to retry.
     """
     if retry_state.outcome is None:
         return False
@@ -57,46 +57,51 @@ def should_retry_error(retry_state: RetryCallState):
         
     print(f"Caught exception: {type(exception).__name__} - {str(exception)}")
     
-    # 匹配更多错误类型
+    # Match more error types that are usually transient/retriable
     if isinstance(exception, (APIError, RemoteProtocolError, ConnectError)):
         return True
     
-    # 通过错误消息匹配
+    # Match by error message text (covers providers with different exception classes)
     error_msg = str(exception).lower()
     return any([
         "connection error" in error_msg,
         "server disconnected" in error_msg,
         "eof occurred" in error_msg,
         "timeout" in error_msg,
-        "rate limit" in error_msg,  # 添加 rate limit 错误检查
-        "rate_limit_error" in error_msg,  # Anthropic 的错误类型
-        "too many requests" in error_msg,  # HTTP 429 错误
-        "overloaded" in error_msg,  # 添加 Anthropic overloaded 错误
-        "overloaded_error" in error_msg,  # 添加 Anthropic overloaded 错误的另一种形式
-        "负载已饱和" in error_msg,  # 添加中文错误消息匹配
-        "error code: 429" in error_msg,  # 添加 HTTP 429 状态码匹配
-        "context_length_exceeded" in error_msg  # 添加上下文长度超限错误匹配
+        "rate limit" in error_msg,            # Rate limit errors
+        "rate_limit_error" in error_msg,      # Anthropic's error type
+        "too many requests" in error_msg,     # HTTP 429
+        "overloaded" in error_msg,            # Anthropic overloaded
+        "overloaded_error" in error_msg,      # Another variant
+        "负载已饱和" in error_msg,               # Chinese message for "load is saturated"
+        "error code: 429" in error_msg,       # Explicit HTTP 429
+        "context_length_exceeded" in error_msg  # Context length exceeded
     ])
+
+
 __CTX_VARS_NAME__ = "context_variables"
 logger = LoggerManager.get_logger()
+
+
 def truncate_message(message: str) -> str:
-    """按比例截断消息"""
+    """Proportionally truncate a message by token count to fit within limits."""
     if not message:
         return message
     tokens = encode_string_by_tiktoken(message)
-    # 假设每个字符平均对应1个token（这是个粗略估计）
+    # Rough estimate safety margin via tokens
     current_length = len(tokens)
-    # 多截断一些以确保在token限制内
+    # Truncate a bit more aggressively to be safely under the token limit
     max_length = 10000
     if current_length > max_length:
         return decode_tokens_by_tiktoken(tokens[:max_length])
     else:
         return message
 
+
 class MetaChain:
     def __init__(self, log_path: Union[str, None, MetaChainLogger] = None):
         """
-        log_path: path of log file, None
+        log_path: path to the log file; if None, logs will not be saved to disk.
         """
         if logger:
             self.logger = logger
@@ -104,8 +109,10 @@ class MetaChain:
             self.logger = log_path
         else:
             self.logger = MetaChainLogger(log_path=log_path)
-        if self.logger.log_path is None: self.logger.info("[Warning] Not specific log path, so log will not be saved", "...", title="Log Path", color="light_cyan3")
-        else: self.logger.info("Log file is saved to", self.logger.log_path, "...", title="Log Path", color="light_cyan3")
+        if self.logger.log_path is None:
+            self.logger.info("[Warning] No log path specified, logs will not be saved", "...", title="Log Path", color="light_cyan3")
+        else:
+            self.logger.info("Log file is saved to", self.logger.log_path, "...", title="Log Path", color="light_cyan3")
 
     def get_chat_completion(
         self,
@@ -130,7 +137,7 @@ class MetaChain:
         # debug_print(debug, "Getting chat completion for...:", messages)
         
         tools = [function_to_json(f) for f in agent.functions]
-        # hide context_variables from model
+        # Hide context_variables from the model
         for tool in tools:
             params = tool["function"]["parameters"]
             params["properties"].pop(__CTX_VARS_NAME__, None)
@@ -190,7 +197,7 @@ class MetaChain:
         
         for tool_call in tool_calls:
             name = tool_call.function.name
-            # handle missing tool case, skip to next tool
+            # Handle missing tool case and skip to the next tool
             if name not in function_map:
                 self.logger.info(f"Tool {name} not found in function map.", title="Tool Call Error", color="red")
                 partial_response.messages.append(
@@ -207,7 +214,7 @@ class MetaChain:
             # debug_print(
             #     debug, f"Processing tool call: {name} with arguments {args}")
             func = function_map[name]
-            # pass context_variables to agent functions
+            # Pass context_variables to agent functions if requested in signature
             if __CTX_VARS_NAME__ in func.__code__.co_varnames:
                 args[__CTX_VARS_NAME__] = context_variables
             try:
@@ -242,19 +249,21 @@ class MetaChain:
             if result.image: 
                 assert handle_mm_func, f"handle_mm_func is not provided, but an image is returned by tool call {name}({tool_call.function.arguments})"
                 partial_response.messages.append(
-                {
-                    "role": "user",
-                    "content": [
-                    # {"type":"text", "text":f"After take last action `{name}({tool_call.function.arguments})`, the image of current page is shown below. Please take next action based on the image, the current state of the page as well as previous actions and observations."},
-                    {"type":"text", "text":handle_mm_func(name, tool_call.function.arguments)},
                     {
-                    "type":"image_url",
-                        "image_url":{
-                            "url":f"data:image/png;base64,{result.image}"
-                        }
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": handle_mm_func(name, tool_call.function.arguments)
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{result.image}"
+                                }
+                            }
+                        ]
                     }
-                ]
-                }
                 )
             # debug_print(debug, "Tool calling: ", json.dumps(partial_response.messages[-1], indent=4), log_path=log_path, title="Tool Calling", color="green")
             
@@ -290,11 +299,11 @@ class MetaChain:
         history = copy.deepcopy(messages)
         init_len = len(messages)
 
-        self.logger.info("Receiveing the task:", history[-1]['content'], title="Receive Task", color="green")
+        self.logger.info("Receiving the task:", history[-1]['content'], title="Receive Task", color="green")
 
         while len(history) - init_len < max_turns and active_agent:
 
-            # get completion with current history, agent
+            # Get completion with the current history and agent
             completion = self.get_chat_completion(
                 agent=active_agent,
                 history=history,
@@ -309,7 +318,7 @@ class MetaChain:
             self.logger.pretty_print_messages(message)
             history.append(
                 json.loads(message.model_dump_json())
-            )  # to avoid OpenAI types (?)
+            )  # Avoid OpenAI types
 
             if not message.tool_calls or not execute_tools:
                 self.logger.info("Ending turn.", title="End Turn", color="red")
@@ -318,7 +327,7 @@ class MetaChain:
             #     debug_print(debug, "Ending turn.", log_path=log_path, title="End Turn", color="red")
             #     break
 
-            # handle function calls, updating context_variables, and switching agents
+            # Handle function calls, update context variables, and possibly switch agents
             if message.tool_calls:
                 partial_response = self.handle_tool_calls(
                     message.tool_calls, active_agent.functions, context_variables, debug, handle_mm_func=active_agent.handle_mm_func
@@ -335,6 +344,7 @@ class MetaChain:
             agent=active_agent,
             context_variables=context_variables,
         )
+
     @retry(
         stop=stop_after_attempt(6),
         wait=wait_exponential(multiplier=2, min=30, max=1200),
@@ -364,7 +374,7 @@ class MetaChain:
         # debug_print(debug, "Getting chat completion for...:", messages)
         
         tools = [function_to_json(f) for f in agent.functions]
-        # hide context_variables from model
+        # Hide context_variables from the model
         for tool in tools:
             params = tool["function"]["parameters"]
             params["properties"].pop(__CTX_VARS_NAME__, None)
@@ -372,7 +382,6 @@ class MetaChain:
                 params["required"].remove(__CTX_VARS_NAME__)
         create_model = model_override or agent.model
         if create_model not in NOT_USE_FN_CALL:
-            
             # assert litellm.supports_function_calling(model = create_model) == True, f"Model {create_model} does not support function calling, please set `FN_CALL=False` to use non-function calling mode"
             create_params = {
                 "model": create_model,
@@ -446,15 +455,9 @@ class MetaChain:
             )
         except (ContextWindowExceededError, BadRequestError) as e:
             error_msg = str(e)
-            # 检查是否是上下文长度超限错误
+            # Check if it is a context-length-exceeded error
             if "context length" in error_msg.lower() or "context_length_exceeded" in error_msg:
-                # 提取超出的token数量
-                # match = re.search(r'resulted in (\d+) tokens.*maximum context length is (\d+)', error_msg)
-                # if match:
-                # current_tokens = int(match.group(1))
-                # max_tokens = int(match.group(2))
-                
-                # 修改最后一条消息
+                # If the last message is a string, truncate and retry once
                 if history and len(history) > 0:
                     last_message = history[-1]
                     if isinstance(last_message.get('content'), str):
@@ -462,11 +465,11 @@ class MetaChain:
                             last_message['content'],
                         )
                         self.logger.info(
-                            f"消息已截断以适应上下文长度限制", 
+                            "Message has been truncated to fit within context length limits.", 
                             title="Message Truncated", 
                             color="yellow"
                         )
-                        # 重试一次
+                        # Retry once after truncation
                         return await self.get_chat_completion_async(
                             agent=agent,
                             history=history,
@@ -475,7 +478,7 @@ class MetaChain:
                             stream=stream,
                             debug=debug,
                         )
-            # 如果不是上下文长度问题或无法处理，则重新抛出异常
+            # If not a context length issue or cannot be handled, re-raise
             raise e
     
     async def run_async(
@@ -496,11 +499,11 @@ class MetaChain:
         history = copy.deepcopy(messages)
         init_len = len(messages)
 
-        self.logger.info("Receiveing the task:", history[-1]['content'], title="Receive Task", color="green")
+        self.logger.info("Receiving the task:", history[-1]['content'], title="Receive Task", color="green")
 
         while len(history) - init_len < max_turns and active_agent:
 
-            # get completion with current history, agent
+            # Get completion with the current history and agent
             try:
                 completion_response = await self.try_completion_with_truncation(
                     agent=active_agent,
@@ -520,7 +523,7 @@ class MetaChain:
             self.logger.pretty_print_messages(message)
             history.append(
                 json.loads(message.model_dump_json())
-            )  # to avoid OpenAI types (?)
+            )  # Avoid OpenAI types
 
             if enter_agent.tool_choice != "required":
                 if (not message.tool_calls and active_agent.name == enter_agent.name) or not execute_tools:
@@ -561,16 +564,13 @@ class MetaChain:
                         self.logger.info(f"Error: {e}", title="Error", color="red")
                         history.append({"role": "error", "content": f"Error: {e}"})
                         break
-            # if (message.tool_calls and message.tool_calls[0].function.name == "case_resolved") or not execute_tools:
-            #     debug_print(debug, "Ending turn.", log_path=log_path, title="End Turn", color="red")
-            #     break
 
-            # handle function calls, updating context_variables, and switching agents
+            # Handle function calls, update context variables, and possibly switch agents
             if message.tool_calls:
                 try:
                     partial_response = self.handle_tool_calls(
-                    message.tool_calls, active_agent.functions, context_variables, debug, handle_mm_func=active_agent.handle_mm_func
-                )
+                        message.tool_calls, active_agent.functions, context_variables, debug, handle_mm_func=active_agent.handle_mm_func
+                    )
                 except Exception as e:
                     self.logger.info(f"Error: {e}", title="Error", color="red")
                     history.append({"role": "error", "content": f"Error: {e}"})
