@@ -17,10 +17,18 @@ import base64
 
 os.environ["PYTHONIOENCODING"] = "utf-8"
 
-# If you want to use a proxy, uncomment and adjust the following lines
-os.environ['https_proxy'] = 'http://100.68.161.73:3128'
-os.environ['http_proxy'] = 'http://100.68.161.73:3128'
-os.environ['no_proxy'] = 'localhost,127.0.0.1,0.0.0.0'
+# 안전한 BASE_DIR
+BASE_DIR = os.path.dirname(os.path.abspath(__file__)) if "__file__" in globals() else os.getcwd()
+
+# (옵션) 프록시: 기본 OFF, 필요 시 USE_PROXY=1로 On
+if os.getenv("USE_PROXY") == "1":
+    os.environ['https_proxy'] = os.getenv('HTTPS_PROXY', '')
+    os.environ['http_proxy']  = os.getenv('HTTP_PROXY', '')
+    os.environ['no_proxy']    = os.getenv('NO_PROXY', 'localhost,127.0.0.1,0.0.0.0,::1,gradio.app,gradio.live')
+else:
+    for k in ['http_proxy','https_proxy','HTTP_PROXY','HTTPS_PROXY']:
+        os.environ.pop(k, None)
+    os.environ['no_proxy'] = 'localhost,127.0.0.1,0.0.0.0,::1,gradio.app,gradio.live'
 
 def setup_path():
     # logs_dir = os.path.join("casestudy_results", f'agent_{container_name}', 'logs')
@@ -36,10 +44,11 @@ def setup_path():
 
 # Configure logging system
 def setup_logging():
-    logs_dir = os.path.join(os.path.dirname(__file__), "logs")
+    logs_dir = os.path.join(BASE_DIR, "logs")
     os.makedirs(logs_dir, exist_ok=True)
-    current_date = datetime.datetime.now().strftime("%Y-%m-%d %H-%M-%S")
+    current_date = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     log_file = os.path.join(logs_dir, f"log_{current_date}.log")
+
     global_state.LOG_PATH = log_file
 
     root_logger = logging.getLogger()
@@ -150,9 +159,10 @@ def get_latest_log():
 
 
 def get_base64_image(image_path):
-    with open(image_path, "rb") as image_file:
-        encoded = base64.b64encode(image_file.read()).decode("utf-8")
-    return f"data:image/png;base64,{encoded}"
+    img_path = image_path if os.path.isabs(image_path) else os.path.join(BASE_DIR, image_path)
+    with open(img_path, "rb") as f:
+        return "data:image/png;base64," + base64.b64encode(f.read()).decode("utf-8")
+
 
 
 # Global variables
@@ -977,11 +987,11 @@ def create_ui():
                 )
             else:
                 status_with_indicator = (
-                    f"<span class='status-indicator status-success'></span> {status}"
+                    f"<span class='status-indicator status-success'></span> {status} | {token_count}"
                 )
 
-            yield token_count, status_with_indicator, filtered_logs, scroll_script, updated_index
-            # yield token_count, status_with_indicator, logs2
+            # yield token_count, status_with_indicator, filtered_logs, scroll_script, updated_index
+            yield state, status_with_indicator, filtered_logs, scroll_script, updated_index
         else:
             logs2, updated_index = get_latest_logs(500, state, LOG_QUEUE, last_index)
             filtered_logs = filter_empty_conversations(logs2)
@@ -1546,7 +1556,7 @@ def create_ui():
             outputs=module_description,
         )
         download_research_logs.click(fn=return_log_file, outputs=file_output)
-        download_paper_logs.click(fn=return_log_file, outputs=file_output)
+        download_paper_logs.click(fn=return_paper_log_file, outputs=file_output)
         download_paper.click(fn=return_paper_file, outputs=file_output)
 
         # clear_logs_button2.click(fn=clear_log_file, outputs=[log_display2])
@@ -1564,11 +1574,11 @@ def main():
     try:
         global LOG_FILE
         global LOG_READ_FILE
-        # global PAPER_LOG
+        global PAPER_LOG
         LOG_FILE = setup_logging()
-        # PAPER_LOG = return_paper_log()
+        PAPER_LOG = return_paper_log()
         LOG_READ_FILE = setup_path()
-        # logging.info("AutoAgent Web application is running")
+        logging.info("AutoAgent Web application is running")
 
         log_thread = threading.Thread(
             target=log_reader_thread, args=(LOG_FILE,), daemon=True
@@ -1580,7 +1590,12 @@ def main():
         app = create_ui()
 
         app.queue()
-        allowed_paths = [os.path.dirname(LOG_FILE)]
+        allowed_paths = [
+            os.path.dirname(LOG_FILE),
+            os.path.join(BASE_DIR, "assets"),
+            os.path.join(BASE_DIR, "casestudy_results"),
+            os.path.join(BASE_DIR, "paper_agent"),
+        ]
         app.launch(
             share=True, 
             server_port=7039,
@@ -1588,7 +1603,7 @@ def main():
             allowed_paths=allowed_paths,
             show_error=True,
             quiet=False,
-            favicon_path="assets/logo.png"
+            favicon_path=os.path.join(BASE_DIR, "assets", "logo.png"),
         )
 
     except Exception as e:
