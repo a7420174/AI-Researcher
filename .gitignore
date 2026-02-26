@@ -8,6 +8,8 @@ research_agent/paper_db/*
 __pycache__/
 tmp/*
 logs/*
+paper_agent/paper_logs/*
+uv.lock
 *.tar.gz
 
 *.egg-info
@@ -21,9 +23,6 @@ research_agent/evaluation_results/*
 research_agent/evaluation/*/data/
 research_agent/evaluation/*/data/*
 research_agent/evaluation/**/data/
-
-research_agent/cache/*
-research_agent/cache_*/*
 
 research_agent/.env
 

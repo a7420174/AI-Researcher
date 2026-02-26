@@ -194,6 +194,7 @@ def visualizer(env: RequestsMarkdownBrowser, image_path: str, question: Optional
             value=f"Error in `visualizer`: {e}",
         )
 
+@register_tool("question_answer_on_whole_page")
 def question_answer_on_whole_page(env: RequestsMarkdownBrowser, question: str) -> str:
     """
     Ask a question on the whole page and return the answer.

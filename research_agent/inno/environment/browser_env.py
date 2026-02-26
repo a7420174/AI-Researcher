@@ -25,10 +25,10 @@ from browsergym.core.action.functions import goto, page, get_elem_by_bid, demo_m
 import os
 from typing import Dict, Union, cast, Literal
 from playwright.sync_api import Page, Download
-from inno.io_utils import read_file
-from inno.environment.mdconvert import _get_page_markdown
-from inno.environment.browser_cookies import convert_cookies_to_python
-from inno.environment.cookies_data import COOKIES_LIST
+from research_agent.inno.io_utils import read_file
+from research_agent.inno.environment.mdconvert import _get_page_markdown
+from research_agent.inno.environment.browser_cookies import convert_cookies_to_python
+from research_agent.inno.environment.cookies_data import COOKIES_LIST
 # from constant import DOCKER_WORKPLACE_NAME, LOCAL_ROOT
 from functools import update_wrapper
 from inspect import signature
@@ -346,9 +346,9 @@ def _checkMeetChallenge():
 class BrowserEnv:
     def __init__(self, browsergym_eval_env: str | None = None, local_root: str | None = None, workplace_name: str | None = None):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_dir = Path(f"logs/res_{timestamp}")
+        log_dir = Path(f"logs")
         log_dir.mkdir(parents=True, exist_ok=True)  # recursively create all necessary parent directories
-        log_path = str(log_dir / "browser_env.log")
+        log_path = str(log_dir / f"browser_env_{timestamp}.log")
         self.log_path = log_path
         self.html_text_converter = self.get_html_text_converter()
         self.eval_mode = False

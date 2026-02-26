@@ -1,4 +1,6 @@
 # global_state.py
+import threading
+from typing import Callable, Optional
 
 LOG_PATH = ""
 
@@ -8,6 +10,11 @@ FIRST_MAIN = False
 
 EXIT_FLAG = False
 INIT_FLAG = False
+INIT_LOCK = threading.Lock()
+
+CONFIRM_HOOK: Optional[Callable[[str], bool]] = None
+
+CODE_ENV = None
 # WORKFLOW_FLAG = False
 # AGENTCREATE_FLAS = False
 

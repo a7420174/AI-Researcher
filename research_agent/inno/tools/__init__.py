@@ -1,66 +1,52 @@
-# from .code_knowledge import gen_code_tree_structure
-# from .execution import execute_command
-# from .files import read_file, create_file, write_file, list_files, create_directory
-# from .PythonAction import run_python
-# from .rag_code import code_rag
-# from .tool_retriever import get_api_doc
-# from .rag_code_tree import code_tree_rag
-# from .inner import case_resolved
-# from .code_report import check_tool, check_agent
-# from .github_ops import get_current_branch, get_diff, push_changes, submit_pull_request
-
-# import os
-# import importlib
-# from metachain.registry import registry
-
-# # 获取当前目录下的所有 .py 文件
-# current_dir = os.path.dirname(__file__)
-# for file in os.listdir(current_dir):
-#     if file.endswith('.py') and not file.startswith('__'):
-#         module_name = file[:-3]
-#         importlib.import_module(f'metachain.tools.{module_name}')
-
-# # 导出所有注册的工具
-# globals().update(registry.tools)
-
-# __all__ = list(registry.tools.keys())
-
+# research_agent/inno/tools/__init__.py
 import os
 import importlib
-from research_agent.inno.registry import registry
+from typing import Iterable, Optional
 
-def import_tools_recursively(base_dir: str, base_package: str):
-    """Recursively import all tools in .py files
-    
-    Args:
-        base_dir: the root directory to start searching
-        base_package: the base name of the Python package
+from research_agent.inno.registry import registry, get_tool, get_tools
+
+
+def bootstrap_import(
+    modules: Optional[Iterable[str]] = None,
+    *,
+    base_dir: Optional[str] = None,
+    base_package: Optional[str] = None,
+    quiet: bool = True,
+) -> None:
     """
-    for root, dirs, files in os.walk(base_dir):
-        # get the relative path to the base directory
-        rel_path = os.path.relpath(root, base_dir)
-        
-        for file in files:
-            if file.endswith('.py') and not file.startswith('__'):
-                # build the module path
-                if rel_path == '.':
-                    # in the root directory
-                    module_path = f"{base_package}.{file[:-3]}"
-                else:
-                    # in the subdirectory
-                    package_path = rel_path.replace(os.path.sep, '.')
-                    module_path = f"{base_package}.{package_path}.{file[:-3]}"
-                
-                try:
-                    importlib.import_module(module_path)
-                except Exception as e:
-                    print(f"Warning: Failed to import {module_path}: {e}")
+    Optionally import tool modules to trigger @register_tool decorators.
 
-# get the current directory and import all tools
-current_dir = os.path.dirname(__file__)
-import_tools_recursively(current_dir, 'inno.tools')
+    - If `modules` is provided: import each module path (preferred for explicitness).
+    - Else if base_dir & base_package are provided: recursively import .py files (legacy compatibility).
+    """
+    if modules:
+        for m in modules:
+            try:
+                importlib.import_module(m)
+            except Exception as e:
+                if not quiet:
+                    print(f"[tools.bootstrap] failed to import {m}: {e}")
+        return
 
-# export all tool creation functions
-globals().update(registry.tools)
+    if base_dir and base_package:
+        for root, _, files in os.walk(base_dir):
+            rel = os.path.relpath(root, base_dir)
+            for f in files:
+                if f.endswith(".py") and not f.startswith("__"):
+                    module = (
+                        f"{base_package}.{f[:-3]}"
+                        if rel == "."
+                        else f"{base_package}.{rel.replace(os.path.sep, '.')}.{f[:-3]}"
+                    )
+                    try:
+                        importlib.import_module(module)
+                    except Exception as e:
+                        if not quiet:
+                            print(f"[tools.bootstrap] failed to import {module}: {e}")
 
-__all__ = list(registry.tools.keys())
+
+# Re-export registry views
+tools = registry.tools
+tools_info = registry.tools_info
+
+__all__ = ["bootstrap_import", "tools", "tools_info", "get_tool", "get_tools"]

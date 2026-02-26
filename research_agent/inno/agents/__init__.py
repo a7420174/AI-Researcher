@@ -1,63 +1,53 @@
-# from metachain.agents.programming_agent import get_programming_agent
-# from metachain.agents.tool_retriver_agent import get_tool_retriver_agent
-# from metachain.agents.agent_check_agent import get_agent_check_agent
-# from metachain.agents.tool_check_agent import get_tool_check_agent
-# from metachain.agents.github_agent import get_github_agent
-# from metachain.agents.programming_triage_agent import get_programming_triage_agent
-# from metachain.agents.plan_agent import get_plan_agent
-
-# import os
-# import importlib
-# from metachain.registry import registry
-
-# # 获取当前目录下的所有 .py 文件
-# current_dir = os.path.dirname(__file__)
-# for file in os.listdir(current_dir):
-#     if file.endswith('.py') and not file.startswith('__'):
-#         module_name = file[:-3]
-#         importlib.import_module(f'metachain.agents.{module_name}')
-
-# # 导出所有注册的 agent 创建函数
-# globals().update(registry.agents)
-
-# __all__ = list(registry.agents.keys())
-
+# research_agent/inno/agents/__init__.py
 import os
 import importlib
-from research_agent.inno.registry import registry
+from typing import Iterable, Optional
 
-def import_agents_recursively(base_dir: str, base_package: str):
-    """Recursively import all agents in .py files
-    
-    Args:
-        base_dir: the root directory to start searching
-        base_package: the base name of the Python package
+from research_agent.inno.registry import (
+    registry,
+    get_agent_factory,
+)
+
+def bootstrap_import(
+    modules: Optional[Iterable[str]] = None,
+    *,
+    base_dir: Optional[str] = None,
+    base_package: Optional[str] = None,
+    quiet: bool = True,
+) -> None:
     """
-    for root, dirs, files in os.walk(base_dir):
-        # get the relative path to the base directory
-        rel_path = os.path.relpath(root, base_dir)
-        
-        for file in files:
-            if file.endswith('.py') and not file.startswith('__'):
-                # build the module path
-                if rel_path == '.':
-                    # in the root directory
-                    module_path = f"{base_package}.{file[:-3]}"
-                else:
-                    # in the subdirectory
-                    package_path = rel_path.replace(os.path.sep, '.')
-                    module_path = f"{base_package}.{package_path}.{file[:-3]}"
-                
-                try:
-                    importlib.import_module(module_path)
-                except Exception as e:
-                    print(f"Warning: Failed to import {module_path}: {e}")
+    Optionally import agent modules to trigger @register_agent decorators.
 
-# get the current directory and import all agents
-current_dir = os.path.dirname(__file__)
-import_agents_recursively(current_dir, 'inno.agents')
+    Preferred: pass explicit module paths via `modules`.
+    Legacy: if `base_dir` & `base_package` are provided, recursively import .py files.
+    """
+    if modules:
+        for m in modules:
+            try:
+                importlib.import_module(m)
+            except Exception as e:
+                if not quiet:
+                    print(f"[agents.bootstrap] failed to import {m}: {e}")
+        return
 
-# export all agent creation functions
-globals().update(registry.agents)
+    if base_dir and base_package:
+        for root, _, files in os.walk(base_dir):
+            rel = os.path.relpath(root, base_dir)
+            for f in files:
+                if f.endswith(".py") and not f.startswith("__"):
+                    module = (
+                        f"{base_package}.{f[:-3]}"
+                        if rel == "."
+                        else f"{base_package}.{rel.replace(os.path.sep, '.')}.{f[:-3]}"
+                    )
+                    try:
+                        importlib.import_module(module)
+                    except Exception as e:
+                        if not quiet:
+                            print(f"[agents.bootstrap] failed to import {module}: {e}")
 
-__all__ = list(registry.agents.keys())
+# Re-export registry views
+agents = registry.agents
+agents_info = registry.agents_info
+
+__all__ = ["bootstrap_import", "agents", "agents_info", "get_agent_factory"]

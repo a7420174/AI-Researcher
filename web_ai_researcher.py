@@ -1,4 +1,5 @@
 from main_ai_researcher import main_ai_researcher
+from app_bootstrap import bootstrap_registry
 import os
 import gradio as gr
 import time
@@ -10,29 +11,38 @@ import importlib
 from dotenv import load_dotenv, set_key, find_dotenv, unset_key
 import threading
 import queue
-import re  # For regular expression operations
+import re
 import random
 import global_state
 import base64
+import atexit
+from constant import MODULE_DESCRIPTIONS, DEFAULT_ENV_TEMPLATE
 
 os.environ["PYTHONIOENCODING"] = "utf-8"
 
 # 안전한 BASE_DIR
-BASE_DIR = os.path.dirname(os.path.abspath(__file__)) if "__file__" in globals() else os.getcwd()
+BASE_DIR = (
+    os.path.dirname(os.path.abspath(__file__))
+    if "__file__" in globals()
+    else os.getcwd()
+)
 
 # (옵션) 프록시: 기본 OFF, 필요 시 USE_PROXY=1로 On
 if os.getenv("USE_PROXY") == "1":
-    os.environ['https_proxy'] = os.getenv('HTTPS_PROXY', '')
-    os.environ['http_proxy']  = os.getenv('HTTP_PROXY', '')
-    os.environ['no_proxy']    = os.getenv('NO_PROXY', 'localhost,127.0.0.1,0.0.0.0,::1,gradio.app,gradio.live')
+    os.environ["https_proxy"] = os.getenv("HTTPS_PROXY", "")
+    os.environ["http_proxy"] = os.getenv("HTTP_PROXY", "")
+    os.environ["no_proxy"] = os.getenv(
+        "NO_PROXY", "localhost,127.0.0.1,0.0.0.0,::1,gradio.app,gradio.live"
+    )
 else:
-    for k in ['http_proxy','https_proxy','HTTP_PROXY','HTTPS_PROXY']:
+    for k in ["http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY"]:
         os.environ.pop(k, None)
-    os.environ['no_proxy'] = 'localhost,127.0.0.1,0.0.0.0,::1,gradio.app,gradio.live'
+    os.environ["no_proxy"] = "localhost,127.0.0.1,0.0.0.0,::1,gradio.app,gradio.live"
+
 
 def setup_path():
     # logs_dir = os.path.join("casestudy_results", f'agent_{container_name}', 'logs')
-    logs_dir = os.path.join("casestudy_results", f'agent', 'logs')
+    logs_dir = os.path.join("casestudy_results", f"agent", "logs")
     os.makedirs(logs_dir, exist_ok=True)
 
     # Generate log filename (using current date and time)
@@ -79,18 +89,32 @@ def setup_logging():
     return log_file
 
 
+def cleanup_docker():
+    if global_state.CODE_ENV is not None:
+        try:
+            logging.info("Stopping Docker container...")
+            global_state.CODE_ENV.stop_container()
+            logging.info("Docker container stopped.")
+        except Exception as e:
+            logging.warning(f"Failed to stop Docker container: {e}")
+
+
+atexit.register(cleanup_docker)
+
+
 def return_log_file():
     return LOG_FILE
 
+
 def return_paper_file():
-    category = os.getenv("CATEGORY")
-    instance_id = os.getenv("INSTANCE_ID")
     global PAPER_FILE
-    PAPER_FILE = f'{category}/target_sections/{instance_id}/iclr2025_conference.pdf'
-    return PAPER_FILE
+    paper_file = os.getenv("PAPER_FILE", PAPER_FILE)
+    return paper_file
+
 
 def return_paper_log_file():
     return PAPER_LOG
+
 
 def return_paper_log():
     logs_dir = os.path.join(BASE_DIR, "paper_agent", "paper_logs")
@@ -102,7 +126,7 @@ def return_paper_log():
 
     # Generate log filename (using current date and time)
     # current_date = datetime.datetime.now().strftime("%Y-%m-%d")
-    current_date = datetime.datetime.now().strftime("%Y-%m-%d %H-%M-%S")
+    current_date = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     log_file = os.path.join(logs_dir, f"rotated_vq_{current_date}.log")
 
     global_state.LOG_PATH = log_file
@@ -159,22 +183,19 @@ def get_latest_log():
 
 
 def get_base64_image(image_path):
-    img_path = image_path if os.path.isabs(image_path) else os.path.join(BASE_DIR, image_path)
+    img_path = (
+        image_path if os.path.isabs(image_path) else os.path.join(BASE_DIR, image_path)
+    )
     with open(img_path, "rb") as f:
         return "data:image/png;base64," + base64.b64encode(f.read()).decode("utf-8")
-
 
 
 # Global variables
 LOG_FILE = None
 LOG_READ_FILE = None
 PAPER_LOG = None
-category = os.getenv("CATEGORY")
-instance_id = os.getenv("INSTANCE_ID")
+PAPER_FILE = "./paper_agent/paper_logs/paper.pdf"
 
-PAPER_FILE = f'{category}/target_sections/{instance_id}/iclr2025_conference.pdf'
-# PAPER_FILE = './vq/target_sections/rotated_vq/iclr2025_conference.pdf'
-# PAPER_LOG = './paper_agent/paper_logs/rotated_vq.log'
 LOG_QUEUE: queue.Queue = queue.Queue()
 STOP_LOG_THREAD = threading.Event()
 CURRENT_PROCESS = None
@@ -197,6 +218,7 @@ def log_reader_thread(log_file):
     except Exception as e:
         logging.error(f"Exception occurred in background log reader thread: {str(e)}")
 
+
 def parse_logs_incrementally(logs, state_list, last_index):
     existing_inputs = set()
     existing_pairs = set()
@@ -213,36 +235,40 @@ def parse_logs_incrementally(logs, state_list, last_index):
 
     # Tools to display in "Tool Execution"
     allowed_tools = {
-        "execute_command", "run_python", "create_file", 
-        "write_file", "list_files", "gen_code_tree_structure"
+        "execute_command",
+        "run_python",
+        "create_file",
+        "write_file",
+        "list_files",
+        "gen_code_tree_structure",
     }
 
     def adjust_markdown_headers(content):
         """Adjust markdown header levels to avoid clashing with main headers."""
-        lines = content.split('\n')
+        lines = content.split("\n")
         adjusted_lines = []
-        
+
         for line in lines:
             # Check if the line is a markdown header
-            if line.strip().startswith('#'):
+            if line.strip().startswith("#"):
                 # Determine header level
                 header_level = 0
                 for char in line:
-                    if char == '#':
+                    if char == "#":
                         header_level += 1
                     else:
                         break
-                
+
                 # If header level is 1-3, shift it down to 4-6
                 if header_level <= 3:
-                    adjusted_line = '#' * (header_level + 3) + line[header_level:]
+                    adjusted_line = "#" * (header_level + 3) + line[header_level:]
                     adjusted_lines.append(adjusted_line)
                 else:
                     adjusted_lines.append(line)
             else:
                 adjusted_lines.append(line)
-        
-        return '\n'.join(adjusted_lines)
+
+        return "\n".join(adjusted_lines)
 
     for line in new_logs:
         line = line.strip()
@@ -260,7 +286,7 @@ def parse_logs_incrementally(logs, state_list, last_index):
                 "tool_calls_content": "",
                 "tool_execution_time": None,
                 "tool_execution_content": "",
-                "current_tool_name": None  # Track current tool name
+                "current_tool_name": None,  # Track current tool name
             }
             if "Receive Task" in line:
                 state = "await_user_time"
@@ -272,7 +298,9 @@ def parse_logs_incrementally(logs, state_list, last_index):
                 current_convo["user_time"] = line.strip("[]")
                 state = "await_user_input"
 
-            elif state == "await_user_input" and line.lower().startswith("receiveing the task:"):
+            elif state == "await_user_input" and line.lower().startswith(
+                "receiveing the task:"
+            ):
                 state = "user_content"
 
             elif state == "user_content" and not line.startswith("*"):
@@ -365,7 +393,7 @@ def parse_logs_incrementally(logs, state_list, last_index):
             assistant_content = convo["assistant_content"].strip()
             if assistant_content.lower() == "none":
                 assistant_content = ""
-            
+
             # Always show assistant block (even if empty after normalization)
             output_parts.append(
                 f"### 🤖 {convo['assistant_role']} ({convo['assistant_time']})\n{adjust_markdown_headers(assistant_content)}"
@@ -374,18 +402,18 @@ def parse_logs_incrementally(logs, state_list, last_index):
             output_parts.append(
                 f"### 🛠️ Tool Calls\n```python\n{convo['tool_calls_content'].strip()}\n```"
             )
-        
+
         # Show Tool Execution only for allowed tools, as a fenced markdown block
         if convo["tool_execution_content"].strip():
             tool_name = convo.get("current_tool_name", "")
-            
+
             # Try to extract tool name from tool_execution_content if missing
             if not tool_name:
-                for line in convo["tool_execution_content"].split('\n'):
+                for line in convo["tool_execution_content"].split("\n"):
                     if "tool execution:" in line.lower():
                         tool_name = line.split(":")[-1].strip()
                         break
-            
+
             if tool_name in allowed_tools:
                 tool_execution_content = convo["tool_execution_content"].strip()
                 output_parts.append(
@@ -406,14 +434,12 @@ def parse_logs_incrementally(logs, state_list, last_index):
     return state_list, new_last_index
 
 
-
 def get_latest_logs(max_lines=500, state=None, queue_source=None, last_index=0):
 
     logs = []
     log_queue = queue_source if queue_source else LOG_QUEUE
     temp_queue = queue.Queue()
     temp_logs = []
-
 
     try:
         while not log_queue.empty():
@@ -448,58 +474,11 @@ def get_latest_logs(max_lines=500, state=None, queue_source=None, last_index=0):
     if not filtered_logs:
         return state, 0
 
-    final_contents, updated_index = parse_logs_incrementally(filtered_logs, state, last_index)
+    final_contents, updated_index = parse_logs_incrementally(
+        filtered_logs, state, last_index
+    )
 
     return final_contents, updated_index
-
-
-
-# Dictionary containing module descriptions
-MODULE_DESCRIPTIONS = {
-    "Detailed Idea Description": "At this level, users provide comprehensive descriptions of their specific research ideas. The system processes these detailed inputs to develop implementation strategies based on the user's explicit requirements. Examples 1-2 are the templates of this mode.",
-    "Reference-Based Ideation": "This simpler level involves users submitting reference papers without a specific idea in mind. The user query typically follows the format: 'I have some reference papers, please come up with an innovative idea and implement it with these papers.' The system then analyzes the provided references to generate and develop novel research concepts. Examples 3-4 are the templates of this mode.",
-    "Paper Generation Agent": "Once all research and experimental work is finished, employ this agent for paper generation",
-    # "exit": "exit mode"
-}
-
-# Default .env template
-DEFAULT_ENV_TEMPLATE = """#===========================================
-# MODEL & API 
-# (See https://docs.camel-ai.org/key_modules/models.html#)
-#===========================================
-
-# OPENAI API (https://platform.openai.com/api-keys)
-OPENAI_API_KEY='Your_Key'
-# OPENAI_API_BASE_URL=""
-
-# Azure OpenAI API
-# AZURE_OPENAI_BASE_URL=""
-# AZURE_API_VERSION=""
-# AZURE_OPENAI_API_KEY=""
-# AZURE_DEPLOYMENT_NAME=""
-
-
-# Qwen API (https://help.aliyun.com/zh/model-studio/developer-reference/get-api-key)
-QWEN_API_KEY='Your_Key'
-
-# DeepSeek API (https://platform.deepseek.com/api_keys)
-DEEPSEEK_API_KEY='Your_Key'
-
-#===========================================
-# Tools & Services API
-#===========================================
-
-# Google Search API (https://coda.io/@jon-dallas/google-image-search-pack-example/search-engine-id-and-google-api-key-3)
-GOOGLE_API_KEY='Your_Key'
-SEARCH_ENGINE_ID='Your_ID'
-
-# Chunkr API (https://chunkr.ai/)
-CHUNKR_API_KEY='Your_Key'
-
-# Firecrawl API (https://www.firecrawl.dev/)
-FIRECRAWL_API_KEY='Your_Key'
-#FIRECRAWL_API_URL="https://api.firecrawl.dev"
-"""
 
 
 def validate_input(question: str) -> bool:
@@ -510,18 +489,26 @@ def validate_input(question: str) -> bool:
     return True
 
 
-def run_ai_researcher(question: str, reference: str, example_module: str) -> Tuple[str, str, str]:
+def run_ai_researcher(
+    question: str, reference: str, example_module: str
+) -> Tuple[str, str, str]:
     global CURRENT_PROCESS
 
     # Validate input
     if not validate_input(question):
         logging.warning("User submitted invalid input")
-        return ("Please enter a valid question", "0", "❌ Error: Invalid input question")
+        return (
+            "Please enter a valid question",
+            "0",
+            "❌ Error: Invalid input question",
+        )
 
     try:
         # Ensure environment variables are loaded
         load_dotenv(find_dotenv(), override=True)
-        logging.info(f"Processing question: '{question}', using module: {example_module}")
+        logging.info(
+            f"Processing question: '{question}', using module: {example_module}"
+        )
 
         # Check module support
         if example_module not in MODULE_DESCRIPTIONS:
@@ -589,7 +576,7 @@ def init_env_file():
 
 def load_env_vars():
     """Load environment variables and return them as a dictionary.
-    
+
     Returns:
         dict: A dict mapping variable name -> (value, source)
     """
@@ -748,7 +735,7 @@ def is_api_related(key: str) -> bool:
         "workplace_name",
         "cache_path",
         "port",
-        "max_iter_times"
+        "max_iter_times",
     ]
 
     return any(keyword in key.lower() for keyword in api_keywords)
@@ -831,7 +818,9 @@ def save_env_table_changes(data):
                     value = row[1] if isinstance(row, pd.Series) else row.iloc[1]
 
                     if key and str(key).strip():
-                        logging.info(f"Processing environment variable: {key} = {value}")
+                        logging.info(
+                            f"Processing environment variable: {key} = {value}"
+                        )
                         add_env_var(key, str(value))
                         processed_keys.add(key)
 
@@ -888,6 +877,15 @@ def save_env_table_changes(data):
         return f"❌ Save failed: {str(e)}"
 
 
+def force_reset_state():
+    try:
+        with global_state.INIT_LOCK:
+            global_state.INIT_FLAG = False
+        return "✅ State has been reset."
+    except Exception as e:
+        return f"❌ Reset failed: {e}"
+
+
 def get_env_var_value(key):
     """Get the effective value of an environment variable.
 
@@ -942,13 +940,13 @@ def create_ui():
             for user_msg, bot_msg in conversations:
                 user_empty = not user_msg.strip()
                 bot_empty = not bot_msg.strip()
-                
+
                 if user_empty and bot_empty:
                     continue
-                
+
                 processed_user = user_msg if not user_empty else None
                 processed_bot = bot_msg if not bot_empty else None
-                
+
                 filtered.append((processed_user, processed_bot))
             return filtered
 
@@ -967,8 +965,8 @@ def create_ui():
                 state,
                 "<span class='status-indicator status-running'></span> Processing...",
                 filtered_logs,
-                scroll_script, 
-                updated_index
+                scroll_script,
+                updated_index,
             )
             time.sleep(1)
 
@@ -986,12 +984,16 @@ def create_ui():
                     f"<span class='status-indicator status-error'></span> {status}"
                 )
             else:
-                status_with_indicator = (
-                    f"<span class='status-indicator status-success'></span> {status} | {token_count}"
-                )
+                status_with_indicator = f"<span class='status-indicator status-success'></span> {status} | {token_count}"
 
             # yield token_count, status_with_indicator, filtered_logs, scroll_script, updated_index
-            yield state, status_with_indicator, filtered_logs, scroll_script, updated_index
+            yield (
+                state,
+                status_with_indicator,
+                filtered_logs,
+                scroll_script,
+                updated_index,
+            )
         else:
             logs2, updated_index = get_latest_logs(500, state, LOG_QUEUE, last_index)
             filtered_logs = filter_empty_conversations(logs2)
@@ -999,8 +1001,8 @@ def create_ui():
                 state,
                 "<span class='status-indicator status-error'></span> Terminated",
                 filtered_logs,
-                None, 
-                updated_index
+                None,
+                updated_index,
             )
 
     with gr.Blocks(theme=gr.themes.Soft(primary_hue="amber")) as app:
@@ -1360,7 +1362,12 @@ def create_ui():
                     elem_id="question_input",
                     # show_copy_button=True,
                     # elem_classes="scrolling-textbox",
-                    value="Write a hello world python file and save it in local file",
+                    value="Please summarize the current development status of ADCs targeting the IL1RAP gene in a structured table. The table should include the following information: company, product name, ADC design (including payload, etc.), development stage, key indications, supporting evidence, and references.",
+                )
+
+                reference_info = gr.Markdown(
+                    value="💡 **Note:** Reference papers are **not required** for Deep Research mode.",
+                    visible=True,
                 )
 
                 reference_input = gr.Textbox(
@@ -1371,13 +1378,13 @@ def create_ui():
                     elem_id="reference_input",
                     # show_copy_button=True,
                     # elem_classes="scrolling-textbox",
-                    value="1. Attention is all you need. ",
+                    value="Attention is all you need.",
                 )
 
                 # Enhanced mode selection (only those in MODULE_DESCRIPTIONS)
                 module_dropdown = gr.Dropdown(
                     choices=list(MODULE_DESCRIPTIONS.keys()),
-                    value="Detailed Idea Description",
+                    value="Deep Research",
                     label="Select Mode",
                     interactive=True,
                 )
@@ -1385,7 +1392,7 @@ def create_ui():
                 module_description = gr.Textbox(
                     lines=3,
                     max_lines=5,
-                    value=MODULE_DESCRIPTIONS["Detailed Idea Description"],
+                    value=MODULE_DESCRIPTIONS["Deep Research"],
                     label="Mode Description",
                     interactive=False,
                     elem_classes="module-info",
@@ -1404,29 +1411,26 @@ def create_ui():
                 examples = [
                     # [
                     #     "1. **Task**: The proposed model is designed to address representation collapse in Vector Quantized (VQ) models, specifically in unsupervised representation learning and latent generative models applicable to modalities like image and audio data.\n\n2. **Core Techniques/Algorithms**: The methodology introduces a linear transformation layer applied to the code vectors in a reparameterization strategy that leverages a learnable latent basis, enhancing the optimization of the entire codebook rather than individual code vectors.\n\n3. **Purpose and Function of Major Technical Components**:\n   - **Encoder (f_θ)**: Maps input data (images or audio) into a continuous latent representation (z_e).\n   - **Codebook (C)**: A collection of discrete code vectors used for quantizing the latent representations.\n   - **Linear Transformation Layer (W)**: A learnable matrix that transforms the codebook vectors, optimizing the entire latent space jointly to improve codebook utilization during training.\n   - **Decoder (g_ϕ)**: Reconstructs the input data from the quantized representations.\n\n4. **Implementation Details**:\n   - **Key Parameters**:\n     - Learning rate (η): Commonly set to 1e-4.\n     - Commitment weight (β): Adjust according to data modality, e.g., set to 1.0 for images and 1000.0 for audio.\n   - **Input/Output Specifications**:\n     - **Input**: Raw data instances, such as images of size 128x128 or audio frames. \n     - **Output**: Reconstructed data (images or audio).\n   - **Important Constraints**: The codebook size should be large enough to capture the data complexity; experiments indicate sizes like 65,536 or larger are beneficial.\n\n5. **Step-by-Step Description of Component Interaction**:\n   - **Step 1**: Initialize the codebook (C) using a distribution (e.g., Gaussian) and freeze its parameters for initial training iterations.\n   - **Step 2**: For each data instance (x), compute the latent representation (z_e) using the encoder (f_θ).\n   - **Step 3**: Perform nearest code search to find the closest codebook vector to z_e using the distance metric. Use the selected code vector for reconstruction.\n   - **Step 4**: Reparameterize the selected code vector using the performed linear transformation (C * W), effectively treating both C and W in the optimization process.\n   - **Step 5**: Calculate the loss, which combines reconstruction loss (MSE between original and decoded output) and commitment loss to ensure effective use of the codebook.\n   - **Step 6**: Update only the linear layer (W) through gradient backpropagation, keeping C static throughout this phase to facilitate the joint training procedure.\n\n6. **Critical Implementation Details**:\n   - To prevent representation collapse, it is crucial to carefully set the learning rate so that the transformation matrix W can adapt without compromising the usefulness of the latent space.\n   - Keeping the codebook static during the initial phase speeds up the convergence while ensuring that the linear transformation can stretch and rotate the latent space effectively.\n   - Regularly evaluate the utilization percentage of the codebook during training iterations, aiming for near-complete usage (ideally 100%) to combat representation collapse actively.",
-
                     #     "Title: Neural discrete representation learning; You can use this paper in the following way: The core VQ method proposed in this study is directly utilized in the proposed model, providing the essential framework for vector quantization.\nTitle: Vector-quantized image modeling with improved VQGAN; You can use this paper in the following way: The improved VQGAN methodology is built upon to develop the proposed model, particularly in optimizing codebook utilization without sacrificing model capacity.\nTitle: Taming transformers for high-resolution image synthesis; You can use this paper in the following way: VQGAN serves as a foundational model that the proposed model builds upon, especially in terms of integrating adversarial techniques to improve latent space optimization.\nTitle: Estimating or propagating gradients through stochastic neurons for conditional computation; You can use this paper in the following way: STE is employed in this study to facilitate gradient descent updates for the codebook vectors, ensuring effective training of the proposed model despite the discrete quantization step.\nTitle: Learning transferable visual models from natural language supervision.; You can use this paper in the following way: VQGAN-LC, as proposed in this study, is used as a comparative baseline to highlight the limitations of relying on pre-trained models for codebook initialization.\nTitle: Finite scalar quantization: VQ-VAE made simple.; You can use this paper in the following way: FSQ is evaluated as an existing method for mitigating representation collapse. The proposed model is proposed as a superior alternative that avoids the dimensionality reduction inherent in FSQ.\nTitle: Auto-encoding variational bayes.; You can use this paper in the following way: Conceptual insights from VAEs are used to theoretically analyze the representation collapse problem in VQ models, highlighting the differences in optimization strategies between VAEs and the proposed approach.\nTitle: Categorical reparameterization with gumbel-softmax.; You can use this paper in the following way: The Gumbel-Softmax technique is discussed as part of alternative quantization strategies, informing the development of the proposed model's approach to optimizing the latent space."
                     # ],
-
                     [
                         "1. The proposed model designed in this paper is designed to improve the performance of Vector Quantized Variational AutoEncoders (VQ-VAEs) by addressing issues with gradient propagation through the non-differentiable vector quantization layer.\n\n2. The core methodologies utilized include:\n   - **Rotation and Rescaling Transformation**: A linear transformation that alters the encoder output to align it with the nearest codebook vector without changing the forward pass output.\n   - **Gradient Propagation Method**: The proposed model ensures that gradients flow from the decoder to the encoder while preserving the angle between the gradient and codebook vector.\n   - **Codebook Management**: Utilizes the connection between the encoder output and the corresponding codebook vectors to mitigate codebook collapse and improve utilization.\n\n3. The primary functions of these components are:\n   - The rotation and rescaling transformation modifies how the encoder output is quantized and how information is retained during backpropagation, enabling gradients to reflect the true positioning of the encoder output relative to the codebook vectors.\n   - The gradient propagation method redefines how gradients are transported back to the encoder, allowing for an enhanced and nuanced movement through the quantization layer, which leads to a better performance during training.\n   - Codebook management practices help in maintaining a diverse set of codebook vectors throughout training, avoiding scenarios where multiple vectors become redundant or unused.\n\n4. Implementation details for each component:\n   - **Key Parameters**: \n     - Codebook size should be configured based on the complexity of the dataset (e.g., 1024 or 8192).\n     - Commitment loss coefficient (\u03b2) is typically set within [0.25, 2].\n   - **Input/Output Specifications**: \n     - Input to the encoder is a continuous high-dimensional vector, while the output is a corresponding quantized vector from the codebook.\n     - The output for reconstruction is generated using the decoder applied to the transformed codebook vectors.\n   - **Important Constraints**: \n     - Ensure that the codebook is updated correctly with an exponential moving average procedure, and treat both rotation and rescaling during the forward pass as constants with respect to the gradient.\n\n5. Step-by-Step Integration of Components:\n   - **Step 1**: Input the data vector into the encoder to obtain the continuous representation.\n   - **Step 2**: Identify the nearest codebook vector to the encoder output.\n   - **Step 3**: Compute the rotation matrix that aligns the encoder output to the codebook vector.\n   - **Step 4**: Apply the rotation and rescaling transformation to obtain the modified output for the decoder (i.e., `\u02dc q`).\n   - **Step 5**: Feed `\u02dc q` into the decoder to produce the reconstructed output.\n   - **Step 6**: Compute the loss using the reconstruction and apply backpropagation.\n   - **Step 7**: During backpropagation, modify the gradient transfer process to maintain the angle using the proposed model, replacing traditional shortcuts in gradient computation.\n\n6. Critical implementation details affecting performance:\n   - The choice of rotation matrix calculation should ensure computational efficiency\u2014using Householder transformations to minimize resource demands.\n   - The deployment of the stop-gradient technique effectively turns off the back-propagation through the quantization layer, which is essential to reflect the intended change without inducing undesired noise in the gradient updates.\n   - Monitor the codebook usage regularly during training to detect any potential collapse early and adjust the training dynamics (e.g., learning rate) accordingly to maintain effective utilization throughout the training period.",
-
-                        "1. Title: Neural discrete representation learning; The proposed model proposed in this paper restructures the gradient propagation through the vector quantization layer of VQ-VAEs, directly building upon the foundational methods established in this study.\n\n2. Title: Straightening out the straight-through estimator: Overcoming optimization challenges in vector quantized networks; The proposed model is proposed as an improvement over the STE, aiming to preserve more gradient information and enhance codebook utilization, thereby overcoming the optimization challenges highlighted in this paper.\n\n3. Title: Estimating or propagating gradients through stochastic neurons for conditional computation; The STE method introduced in this paper serves as the baseline approach that the proposed model aims to improve upon, offering a more nuanced gradient propagation mechanism.\n\n4. Title: High-resolution image synthesis with latent diffusion models; The proposed model is evaluated on VQGANs as utilized in latent diffusion models presented in this study, showcasing significant improvements in reconstruction metrics and codebook utilization.\n\n5. Title: Finite scalar quantization: Vq-vae made simple; By introducing the proposed approach, this study provides an alternative to the methods discussed in this paper, further enhancing training stability and performance in VQ-VAEs.\n\n6. Title: Elements of information theory; The current paper references information theory concepts from this study to explain the importance of low quantization error and high codebook utilization in vector quantization.\n\n7. Title: Vector-quantized image modeling with improved vqgan; The proposed approach is applied to VQGANs as discussed in this study, resulting in improved reconstruction metrics and more efficient codebook usage.\n\n8. Title: Uvim: A unified modeling approach for vision with learned guiding codes; The proposed approach builds upon the vector quantization methodologies discussed in this study, aiming to enhance codebook utilization and gradient efficiency.\n\n9. Title: Auto-encoding variational bayes; The loss function for VQ-VAEs used in the proposed approach follows the ELBO conventions set forth in this study.\n\n10. Title: Categorical reparameterization with gumbel-softmax; The Gumbel-Softmax trick is discussed as one of the methods to sidestep the STE in vector quantization, providing context for the advantages offered by the proposed model."
+                        "1. Title: Neural discrete representation learning; The proposed model proposed in this paper restructures the gradient propagation through the vector quantization layer of VQ-VAEs, directly building upon the foundational methods established in this study.\n\n2. Title: Straightening out the straight-through estimator: Overcoming optimization challenges in vector quantized networks; The proposed model is proposed as an improvement over the STE, aiming to preserve more gradient information and enhance codebook utilization, thereby overcoming the optimization challenges highlighted in this paper.\n\n3. Title: Estimating or propagating gradients through stochastic neurons for conditional computation; The STE method introduced in this paper serves as the baseline approach that the proposed model aims to improve upon, offering a more nuanced gradient propagation mechanism.\n\n4. Title: High-resolution image synthesis with latent diffusion models; The proposed model is evaluated on VQGANs as utilized in latent diffusion models presented in this study, showcasing significant improvements in reconstruction metrics and codebook utilization.\n\n5. Title: Finite scalar quantization: Vq-vae made simple; By introducing the proposed approach, this study provides an alternative to the methods discussed in this paper, further enhancing training stability and performance in VQ-VAEs.\n\n6. Title: Elements of information theory; The current paper references information theory concepts from this study to explain the importance of low quantization error and high codebook utilization in vector quantization.\n\n7. Title: Vector-quantized image modeling with improved vqgan; The proposed approach is applied to VQGANs as discussed in this study, resulting in improved reconstruction metrics and more efficient codebook usage.\n\n8. Title: Uvim: A unified modeling approach for vision with learned guiding codes; The proposed approach builds upon the vector quantization methodologies discussed in this study, aiming to enhance codebook utilization and gradient efficiency.\n\n9. Title: Auto-encoding variational bayes; The loss function for VQ-VAEs used in the proposed approach follows the ELBO conventions set forth in this study.\n\n10. Title: Categorical reparameterization with gumbel-softmax; The Gumbel-Softmax trick is discussed as one of the methods to sidestep the STE in vector quantization, providing context for the advantages offered by the proposed model.",
                     ],
-
                     [
                         "gnn",
-                        "Title: Graph Neural Networks: A Review of Methods and Applications; You can use this paper in the following way: Core methodologies of GNNs were integrated into the proposed model framework to enhance understanding of graph data.\nTitle: Deep Graph Infomax; You can use this paper in the following way: The DGI approach was used to enhance self-supervision in the instruction tuning of the proposed model.\nTitle: Semi-Supervised Classification with Graph Convolutional Networks; You can use this paper in the following way: The concepts from GCNs were adapted for improving generalization in zero-shot learning scenarios.\nTitle: Attention is All You Need; You can use this paper in the following way: Self-attention principles were utilized in the proposed model to effectively manage graph structural information.\nTitle: Graph Attention Networks; You can use this paper in the following way: Attention mechanisms from GATs were integrated to enhance the proposed model's performance on graph tasks.\nTitle: BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding; You can use this paper in the following way: BERT's architecture was adapted for encoding text in relation to graph data.\nTitle: Learning Transferable Visual Models From Natural Language Supervision; You can use this paper in the following way: The design of self-supervised instruction tuning in the proposed model was influenced by the methodologies proposed in this paper.\nTitle: Gpt-gnn: Generative pre-training of graph neural networks; You can use this paper in the following way: The generative pre-training concepts informed the development of the proposed model's learning strategies."
+                        "Title: Graph Neural Networks: A Review of Methods and Applications; You can use this paper in the following way: Core methodologies of GNNs were integrated into the proposed model framework to enhance understanding of graph data.\nTitle: Deep Graph Infomax; You can use this paper in the following way: The DGI approach was used to enhance self-supervision in the instruction tuning of the proposed model.\nTitle: Semi-Supervised Classification with Graph Convolutional Networks; You can use this paper in the following way: The concepts from GCNs were adapted for improving generalization in zero-shot learning scenarios.\nTitle: Attention is All You Need; You can use this paper in the following way: Self-attention principles were utilized in the proposed model to effectively manage graph structural information.\nTitle: Graph Attention Networks; You can use this paper in the following way: Attention mechanisms from GATs were integrated to enhance the proposed model's performance on graph tasks.\nTitle: BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding; You can use this paper in the following way: BERT's architecture was adapted for encoding text in relation to graph data.\nTitle: Learning Transferable Visual Models From Natural Language Supervision; You can use this paper in the following way: The design of self-supervised instruction tuning in the proposed model was influenced by the methodologies proposed in this paper.\nTitle: Gpt-gnn: Generative pre-training of graph neural networks; You can use this paper in the following way: The generative pre-training concepts informed the development of the proposed model's learning strategies.",
                     ],
-
                     [
                         "diffu_flow",
-                        "Title: Denoising diffusion probabilistic models; You can use this paper in the following way: Used as a foundational reference for the denoising processes and model architecture.\nTitle: Generative adversarial nets; You can use this paper in the following way: Referenced for underlying generative capabilities which influenced our proposed model design.\nTitle: Image-noise Optimal Transport in Generative Models; You can use this paper in the following way: Served as a framework for understanding and applying transport concepts to the proposed model.\nTitle: Improving consistency models with generator-induced coupling; You can use this paper in the following way: Detailed analysis of generator behaviors informed our component enhancements.\nTitle: Conditional wasser- stein distances with applications in bayesian ot flow matching; You can use this paper in the following way: Informed the adjustments made in our distance evaluation framework.\nTitle: Imagenet: A large-scale hierarchical image database; You can use this paper in the following way: Utilized CIFAR-10 as a benchmark derived from this foundational work."
-                    ]
+                        "Title: Denoising diffusion probabilistic models; You can use this paper in the following way: Used as a foundational reference for the denoising processes and model architecture.\nTitle: Generative adversarial nets; You can use this paper in the following way: Referenced for underlying generative capabilities which influenced our proposed model design.\nTitle: Image-noise Optimal Transport in Generative Models; You can use this paper in the following way: Served as a framework for understanding and applying transport concepts to the proposed model.\nTitle: Improving consistency models with generator-induced coupling; You can use this paper in the following way: Detailed analysis of generator behaviors informed our component enhancements.\nTitle: Conditional wasser- stein distances with applications in bayesian ot flow matching; You can use this paper in the following way: Informed the adjustments made in our distance evaluation framework.\nTitle: Imagenet: A large-scale hierarchical image database; You can use this paper in the following way: Utilized CIFAR-10 as a benchmark derived from this foundational work.",
+                    ],
                 ]
 
                 with gr.Row(elem_classes="scrolling-example"):
-                    gr.Examples(examples=examples, inputs=[question_input, reference_input])
+                    gr.Examples(
+                        examples=examples, inputs=[question_input, reference_input]
+                    )
 
                 gr.Markdown("""
                 ### Example Description:
@@ -1448,8 +1452,7 @@ def create_ui():
                 with gr.TabItem("Conversation Record"):
                     with gr.Group():
                         log_display2 = gr.Chatbot(
-                            elem_id="chat-log",
-                            elem_classes="log-display"
+                            elem_id="chat-log", elem_classes="log-display"
                         )
 
                         state = gr.State([])
@@ -1461,7 +1464,9 @@ def create_ui():
                         download_research_logs = gr.Button("Extract research log files")
                         download_paper_logs = gr.Button("Extract paper log files")
                         download_paper = gr.Button("Extract paper")
-                        file_output = gr.File(label="click to download", elem_classes="custom-file")
+                        file_output = gr.File(
+                            label="click to download", elem_classes="custom-file"
+                        )
 
                 with gr.TabItem("Environment Variable Management", id="env-settings"):
                     with gr.Group(elem_classes="env-manager-container"):
@@ -1542,10 +1547,15 @@ def create_ui():
 
                     refresh_button.click(fn=update_env_table, outputs=[env_table])
 
-
         run_button.click(
             fn=process_with_live_logs,
-            inputs=[question_input, reference_input, module_dropdown, state, last_index],
+            inputs=[
+                question_input,
+                reference_input,
+                module_dropdown,
+                state,
+                last_index,
+            ],
             # outputs=[token_count_output, status_output, log_display2, scroll_trigger],
             outputs=[state, status_output, log_display2, scroll_trigger, last_index],
         )
@@ -1555,10 +1565,180 @@ def create_ui():
             inputs=module_dropdown,
             outputs=module_description,
         )
+
+        def update_reference_placeholder(module_name):
+            if module_name == "Deep Research":
+                return (
+                    gr.Textbox(
+                        placeholder="Not required for Deep Research mode (optional)"
+                    ),
+                    gr.Markdown(
+                        value="💡 **Note:** Reference papers are **not required** for Deep Research mode."
+                    ),
+                )
+            else:
+                return (
+                    gr.Textbox(placeholder="Please enter your reference papers..."),
+                    gr.Markdown(
+                        value="💡 **Note:** Reference papers are required for this mode (e.g., paper titles, DOIs, or abstracts)."
+                    ),
+                )
+
+        module_dropdown.change(
+            fn=update_reference_placeholder,
+            inputs=module_dropdown,
+            outputs=[reference_input, reference_info],
+        )
+
         download_research_logs.click(fn=return_log_file, outputs=file_output)
         download_paper_logs.click(fn=return_paper_log_file, outputs=file_output)
         download_paper.click(fn=return_paper_file, outputs=file_output)
 
+        # --- [모달 UI 컴포넌트] ---
+        confirm_prompt = gr.Markdown(visible=False)  # 질문 문구
+        confirm_yes = gr.Button("✅ Use cache", visible=False)
+        confirm_resume = gr.Button("⏯️ Resume", visible=False)  # Agent 전용(선택)
+        confirm_no = gr.Button("♻️ Rebuild", visible=False)
+
+        # 모달 상태(스레드 동기화 정보)
+        confirm_state = gr.State(
+            {
+                "event": None,  # threading.Event
+                "answer": None,  # 'use' | 'resume' | 'rebuild'
+            }
+        )
+
+        def _open_confirm(prompt: str, choices=("use", "rebuild", "resume"), st=None):
+            """
+            모달을 열고 새로운 Event를 준비합니다.
+            choices: ('use','rebuild','resume') 중 원하는 버튼만 보이도록 제어
+            """
+            ev = threading.Event()
+            st = {"event": ev, "answer": None}
+
+            # 버튼 가시성 제어
+            show_yes = "use" in choices
+            show_no = "rebuild" in choices
+            show_resume = "resume" in choices
+
+            return (
+                gr.update(value=f"**{prompt}**", visible=True),
+                gr.update(visible=show_yes),
+                gr.update(visible=show_resume),
+                gr.update(visible=show_no),
+                st,
+            )
+
+        def _answer_confirm(choice: str, st):
+            """
+            choice in {'use','resume','rebuild'}
+            클릭 시 상태를 기록하고 Event를 set한 뒤 모달을 닫습니다.
+            """
+            if st and st.get("event"):
+                st["answer"] = choice
+                st["event"].set()
+            # 모달 닫기
+            return (
+                gr.update(visible=False),
+                gr.update(visible=False),
+                gr.update(visible=False),
+                gr.update(visible=False),
+                st,
+            )
+
+        # 버튼과 콜백 연결
+        confirm_yes.click(
+            fn=lambda st: _answer_confirm("use", st),
+            inputs=[confirm_state],
+            outputs=[
+                confirm_prompt,
+                confirm_yes,
+                confirm_resume,
+                confirm_no,
+                confirm_state,
+            ],
+        )
+        confirm_resume.click(
+            fn=lambda st: _answer_confirm("resume", st),
+            inputs=[confirm_state],
+            outputs=[
+                confirm_prompt,
+                confirm_yes,
+                confirm_resume,
+                confirm_no,
+                confirm_state,
+            ],
+        )
+        confirm_no.click(
+            fn=lambda st: _answer_confirm("rebuild", st),
+            inputs=[confirm_state],
+            outputs=[
+                confirm_prompt,
+                confirm_yes,
+                confirm_resume,
+                confirm_no,
+                confirm_state,
+            ],
+        )
+
+        def confirm_hook(prompt: str, choices=None):
+            """
+            flowcache가 호출하는 UI 훅.
+            - prompt: 질문문구
+            - choices: None | ["Yes","No"] | ["Use","Resume","Rebuild"]
+            반환: bool | str  (리팩토링된 flowcache가 알아서 매핑)
+            """
+            # 1) Gradio 스레드에서 모달을 열도록 업데이트 enqueue
+            #    Tool: Yes/No -> ('use','rebuild')
+            #    Agent: Use/Resume/Rebuild -> 모두 표시
+            lower = [c.lower() for c in (choices or [])]
+            if lower == ["yes", "no"]:
+                # Tool: 2지
+                open_out = _open_confirm(prompt, choices=("use", "rebuild"), st=None)
+            else:
+                # Agent 또는 기본: 3지
+                open_out = _open_confirm(
+                    prompt, choices=("use", "resume", "rebuild"), st=None
+                )
+
+            # open_out을 실제 컴포넌트에 반영 (queue 환경에서 .update를 트리거)
+            # Gradio 이벤트 문맥 밖이므로, 아래와 같이 간단하게 state만 세팅:
+            # - confirm_state.value 를 직접 덮어쓰기 어려우면,
+            #   run 버튼 클릭 체인에서 사전에 _open_confirm을 호출해 Event를 준비하는 방식도 사용합니다.
+            # 여기서는 간단화를 위해 confirm_state에 바로 set하도록 가정:
+
+            # Gradio에서 State 업데이트는 이벤트 함수 안에서 이뤄져야 안전합니다.
+            # 안전 구현: 실행 직전에 "미리" 모달을 열어 Event를 준비하는 체인(5단계) 사용 권장.
+
+            # 2) Event가 준비될 때까지 잠시 대기 (이미 준비되었다고 가정)
+            st = confirm_state.value
+            ev = st.get("event") if st else None
+            import time
+
+            for _ in range(50):
+                if ev:
+                    break
+                time.sleep(0.05)
+                st = confirm_state.value
+                ev = st.get("event") if st else None
+
+            # 3) 사용자가 버튼을 누를 때까지 대기
+            # 타임아웃은 필요 시 조정(초)
+            if ev and ev.wait(timeout=600):
+                ans = st.get("answer", "use")
+                # flowcache는 bool/str 모두 수용
+                # Tool의 경우 bool로 돌려줘도 됨(True=use, False=rebuild)
+                if ans in ("use", "resume"):
+                    return "Use" if ans == "use" else "Resume"
+                else:
+                    return "Rebuild"
+            # 타임아웃/예외 시 안전 기본값
+            return "Use"
+
+        global_state.CONFIRM_HOOK = confirm_hook  # flowcache가 여기로 콜백
+
+        force_reset_btn = gr.Button("Force Reset State", variant="secondary")
+        force_reset_btn.click(fn=force_reset_state, outputs=status_output)
         # clear_logs_button2.click(fn=clear_log_file, outputs=[log_display2])
 
         def toggle_auto_refresh(enabled):
@@ -1574,11 +1754,14 @@ def main():
     try:
         global LOG_FILE
         global LOG_READ_FILE
-        global PAPER_LOG
+        # global PAPER_LOG
         LOG_FILE = setup_logging()
-        PAPER_LOG = return_paper_log()
+        # PAPER_LOG = return_paper_log()
         LOG_READ_FILE = setup_path()
         logging.info("AutoAgent Web application is running")
+
+        bootstrap_registry(reset_first=True, quiet=False)
+        logging.info("Registry bootstrap (scan) completed")
 
         log_thread = threading.Thread(
             target=log_reader_thread, args=(LOG_FILE,), daemon=True
@@ -1597,7 +1780,7 @@ def main():
             os.path.join(BASE_DIR, "paper_agent"),
         ]
         app.launch(
-            share=False, 
+            share=False,
             server_port=7039,
             server_name="127.0.0.1",
             allowed_paths=allowed_paths,
