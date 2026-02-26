@@ -490,7 +490,7 @@ def validate_input(question: str) -> bool:
 
 
 def run_ai_researcher(
-    question: str, reference: str, example_module: str, use_docker: bool = True
+    question: str, reference: str, example_module: str
 ) -> Tuple[str, str, str]:
     global CURRENT_PROCESS
 
@@ -506,12 +506,8 @@ def run_ai_researcher(
     try:
         # Ensure environment variables are loaded
         load_dotenv(find_dotenv(), override=True)
-
-        # Save USE_DOCKER to .env
-        add_env_var("USE_DOCKER", str(use_docker).lower(), from_frontend=True)
-
         logging.info(
-            f"Processing question: '{question}', using module: {example_module}, use_docker: {use_docker}"
+            f"Processing question: '{question}', using module: {example_module}"
         )
 
         # Check module support
@@ -525,7 +521,7 @@ def run_ai_researcher(
 
         # Run the researcher
         try:
-            answer = main_ai_researcher(question, reference, example_module, use_docker)
+            answer = main_ai_researcher(question, reference, example_module)
             logging.info("Successfully ran AI Researcher")
         except Exception as e:
             logging.error(f"Error occurred while running Researcher: {str(e)}")
@@ -924,9 +920,7 @@ def create_ui():
             return ""
 
     # A real-time log update function
-    def process_with_live_logs(
-        question, reference, module_name, use_docker, state, last_index
-    ):
+    def process_with_live_logs(question, reference, module_name, state, last_index):
         """Run the researcher while streaming logs to the UI."""
         global CURRENT_PROCESS
 
@@ -934,7 +928,7 @@ def create_ui():
 
         def process_in_background():
             try:
-                result = run_ai_researcher(question, reference, module_name, use_docker)
+                result = run_ai_researcher(question, reference, module_name)
                 result_queue.put(result)
             except Exception as e:
                 result_queue.put(
@@ -1406,13 +1400,6 @@ def create_ui():
                     elem_classes="module-info",
                 )
 
-                use_docker_checkbox = gr.Checkbox(
-                    label="Use Docker (for code execution)",
-                    value=True,
-                    interactive=True,
-                    info="Enable Docker for Python code execution. Uncheck to run without Docker (Deep Research mode works without Docker)",
-                )
-
                 with gr.Row():
                     run_button = gr.Button(
                         "Run", variant="primary", elem_classes="primary"
@@ -1568,7 +1555,6 @@ def create_ui():
                 question_input,
                 reference_input,
                 module_dropdown,
-                use_docker_checkbox,
                 state,
                 last_index,
             ],
