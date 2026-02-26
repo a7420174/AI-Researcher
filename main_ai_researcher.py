@@ -48,6 +48,7 @@ def get_args_research():
     parser.add_argument("--cache_path", type=str, default="cache")
     parser.add_argument("--port", type=int, default=12345)
     parser.add_argument("--max_iter_times", type=int, default=0)
+    parser.add_argument("--use_docker", type=bool, default=True)
     args = parser.parse_args()
     return args
 
@@ -159,13 +160,15 @@ def _find_references_for_topic(topic: str) -> str:
     return "\n".join(references)
 
 
-def main_ai_researcher(input, reference, mode):
+def main_ai_researcher(input, reference, mode, use_docker=None):
     load_dotenv()
     container_name = os.getenv("CONTAINER_NAME")
     workplace_name = os.getenv("WORKPLACE_NAME")
     cache_path = os.getenv("CACHE_PATH")
     port = int(os.getenv("PORT"))
     max_iter_times = int(os.getenv("MAX_ITER_TIMES"))
+    if use_docker is None:
+        use_docker = os.getenv("USE_DOCKER", "true").lower() == "true"
 
     match mode:
         case "Detailed Idea Description":
@@ -202,6 +205,7 @@ def main_ai_researcher(input, reference, mode):
                 args.cache_path = cache_path
                 args.port = port
                 args.max_iter_times = max_iter_times
+                args.use_docker = use_docker
 
                 run_infer_plan.main(args, input, found_reference or reference, input)
 
@@ -239,6 +243,7 @@ def main_ai_researcher(input, reference, mode):
                 args.cache_path = cache_path
                 args.port = port
                 args.max_iter_times = max_iter_times
+                args.use_docker = use_docker
 
                 run_infer_idea.main(args, found_reference or reference, input)
 

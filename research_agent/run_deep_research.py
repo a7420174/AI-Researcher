@@ -1,42 +1,35 @@
 """
-Deep Research Module - Web-based research without ML implementation
-This module performs comprehensive web research using search tools, BioMCP, and LLM.
+Deep Research Module - Docker-independent web-based research
+This module performs comprehensive research using search tools, BioMCP, OpenAlex, and LLM.
+No Docker dependency required.
 """
 
 import os
 import asyncio
 import re
-from typing import Dict, Any, Union, List, Optional
+from typing import Dict, Any, List
 from dotenv import load_dotenv
 import litellm
 
 from research_agent.inno.registry import get_tool
-from research_agent.constant import COMPLETION_MODEL, CHEEP_MODEL, DOCKER_WORKPLACE_NAME
+from research_agent.constant import COMPLETION_MODEL, CHEEP_MODEL
 
-try:
-    from research_agent.inno.environment.browser_env import BrowserEnv
-    from research_agent.inno.environment.docker_env import DockerEnv, DockerConfig
-
-    BROWSER_ENV_AVAILABLE = True
-except ImportError as e:
-    BROWSER_ENV_AVAILABLE = False
-    BrowserEnv = None
-    DockerEnv = None
-    DockerConfig = None
+# Import tools to register them
+from research_agent.inno.tools import biomcp_tools
+from research_agent.inno.tools import openalex_tools
+from research_agent.inno.tools import web_tools
 
 
 class DeepResearchFlow:
     def __init__(
         self,
         cache_path: str = None,
-        log_path: Union[str, None] = None,
+        log_path: str = None,
         model: str = "gpt-4o-2024-08-06",
-        web_env=None,
     ):
         self.cache_path = cache_path
         self.model = model
         self.log_path = log_path
-        self.web_env = web_env
 
     async def research(
         self,
@@ -44,7 +37,7 @@ class DeepResearchFlow:
         max_search_results: int = 10,
     ) -> str:
         """
-        Perform deep research on a given topic using web search, BioMCP, and LLM.
+        Perform deep research on a given topic using search tools, BioMCP, OpenAlex, and LLM.
 
         Args:
             topic: The research topic/question
@@ -57,11 +50,14 @@ class DeepResearchFlow:
 
         biomcp_results = await self._run_biomcp_searches(topic, topic_analysis)
 
-        web_results = await self._run_web_searches(topic, topic_analysis)
+        openalex_results = await self._run_openalex_searches(topic, topic_analysis)
+
+        ddg_results = await self._run_ddg_searches(topic, topic_analysis)
 
         all_results = {
             "biomcp": biomcp_results,
-            "web": web_results,
+            "openalex": openalex_results,
+            "ddg": ddg_results,
         }
 
         research_context = self._format_all_results(all_results)
@@ -76,18 +72,24 @@ BIOMEDICAL DATABASE RESULTS (BioMCP):
 {research_context.get("biomcp", "No BioMCP results")}
 
 {"=" * 60}
-WEB SEARCH RESULTS:
+OPENALEX SEARCH RESULTS (Academic Papers):
 {"=" * 60}
-{research_context.get("web", "No web results")}
+{research_context.get("openalex", "No OpenAlex results")}
+
+{"=" * 60}
+WEB SEARCH RESULTS (DuckDuckGo):
+{"=" * 60}
+{research_context.get("ddg", "No web search results")}
 
 Please provide:
 1. Executive Summary
 2. Key findings and information from biomedical databases
-3. Key findings from web searches
-4. Comparison and synthesis of all sources
-5. Relevant details (companies, products, development stages, indications, etc.)
-6. Sources and references
-7. Any gaps or areas needing further research
+3. Key findings from academic literature (OpenAlex)
+4. Key findings from web searches
+5. Comparison and synthesis of all sources
+6. Relevant details (companies, products, development stages, indications, etc.)
+7. Sources and references
+8. Any gaps or areas needing further research
 
 Format your response in a well-structured manner with clear sections. Use tables where appropriate.
 """
@@ -139,7 +141,6 @@ Example output format:
             content = response.choices[0].message.content
 
             import json
-            import re
 
             json_match = re.search(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", content)
             if json_match:
@@ -175,11 +176,11 @@ Example output format:
         if not analysis["is_biomedical"] and not analysis["genes"]:
             return results
 
-        biomcp_tools = []
+        biomcp_tools_list = []
 
         if analysis["genes"]:
             gene = analysis["genes"][0]
-            biomcp_tools.extend(
+            biomcp_tools_list.extend(
                 [
                     ("biomcp_gene_search", {"gene": gene, "limit": 5}),
                     ("biomcp_article_search", {"gene": gene, "limit": 10}),
@@ -191,41 +192,41 @@ Example output format:
             disease = analysis["diseases"][0]
             if analysis["genes"]:
                 gene = analysis["genes"][0]
-                biomcp_tools.append(
+                biomcp_tools_list.append(
                     (
                         "biomcp_article_search",
                         {"gene": gene, "disease": disease, "limit": 10},
                     )
                 )
-                biomcp_tools.append(
+                biomcp_tools_list.append(
                     (
                         "biomcp_trial_search",
                         {"condition": disease, "intervention": gene, "limit": 10},
                     )
                 )
             else:
-                biomcp_tools.append(
+                biomcp_tools_list.append(
                     ("biomcp_article_search", {"disease": disease, "limit": 10})
                 )
-                biomcp_tools.append(
+                biomcp_tools_list.append(
                     ("biomcp_trial_search", {"condition": disease, "limit": 10})
                 )
 
         if analysis.get("keywords"):
             for keyword in analysis["keywords"]:
-                biomcp_tools.append(
+                biomcp_tools_list.append(
                     ("biomcp_article_search", {"keyword": keyword, "limit": 5})
                 )
 
-        if not biomcp_tools and analysis["is_biomedical"]:
+        if not biomcp_tools_list and analysis["is_biomedical"]:
             main_keyword = (
                 analysis["genes"][0] if analysis["genes"] else topic.split()[0]
             )
-            biomcp_tools.append(
+            biomcp_tools_list.append(
                 ("biomcp_article_search", {"keyword": main_keyword, "limit": 5})
             )
 
-        for tool_name, params in biomcp_tools:
+        for tool_name, params in biomcp_tools_list:
             try:
                 tool = get_tool(tool_name)
                 result = tool(**params)
@@ -237,17 +238,15 @@ Example output format:
 
         return results
 
-    async def _run_web_searches(
-        self, topic: str, analysis: Dict = None
+    async def _run_openalex_searches(
+        self, topic: str, analysis: Dict
     ) -> Dict[str, str]:
-        """Run OpenAlex searches for the topic (academic papers)."""
+        """Run OpenAlex searches for academic papers."""
         results = {}
 
         search_queries = await self._generate_search_queries(topic, analysis)
 
         try:
-            from research_agent.inno.tools import openalex_tools as openalex_module
-
             search_tool = get_tool("openalex_search_papers")
         except Exception as e:
             for query in search_queries:
@@ -256,10 +255,29 @@ Example output format:
 
         for query in search_queries:
             try:
-                result = search_tool(
-                    query=query,
-                    max_results=20,
-                )
+                result = search_tool(query=query, max_results=20)
+                results[query] = result
+            except Exception as e:
+                results[query] = f"Error: {str(e)}"
+
+        return results
+
+    async def _run_ddg_searches(self, topic: str, analysis: Dict) -> Dict[str, str]:
+        """Run DuckDuckGo web searches."""
+        results = {}
+
+        search_queries = await self._generate_search_queries(topic, analysis)
+
+        try:
+            search_tool = get_tool("ddg_search")
+        except Exception as e:
+            for query in search_queries:
+                results[query] = f"Error: ddg_search not available: {e}"
+            return results
+
+        for query in search_queries:
+            try:
+                result = search_tool(query=query, max_results=10)
                 results[query] = result
             except Exception as e:
                 results[query] = f"Error: {str(e)}"
@@ -271,7 +289,7 @@ Example output format:
     ) -> List[str]:
         """Generate dynamic search queries based on the topic using LLM."""
 
-        query_prompt = f"""Generate effective web search queries for the following research question.
+        query_prompt = f"""Generate effective search queries for the following research question.
 
 Research Question: {topic}
 
@@ -285,7 +303,7 @@ Generate 8-12 search queries that would help answer this research question. Incl
 1. General overview queries
 2. Specific queries about companies, products, development status
 3. Clinical trial information
-4. Recent research (don't limit to specific years - search all available)
+4. Recent research
 5. Queries about the specific genes/drugs/diseases mentioned
 
 Return ONLY a JSON array of strings (no explanation):
@@ -301,7 +319,6 @@ Return ONLY a JSON array of strings (no explanation):
             content = response.choices[0].message.content
 
             import json
-            import re
 
             json_match = re.search(r"\[[\s\S]*\]", content)
             if json_match:
@@ -310,18 +327,6 @@ Return ONLY a JSON array of strings (no explanation):
         except Exception as e:
             print(f"Error generating search queries: {e}")
 
-        return [
-            topic,
-            f"{topic} overview",
-            f"{topic} development status",
-            f"{topic} clinical trial",
-            f"{topic} company pipeline",
-        ]
-
-    def _generate_search_queries_sync(
-        self, topic: str, analysis: Dict = None
-    ) -> List[str]:
-        """Synchronous fallback for search query generation."""
         return [
             topic,
             f"{topic} overview",
@@ -342,63 +347,42 @@ Return ONLY a JSON array of strings (no explanation):
         else:
             formatted["biomcp"] = "No BioMCP results available"
 
-        if "web" in results and results["web"]:
-            web_parts = []
-            for query, value in results["web"].items():
-                web_parts.append(f"\n### Query: {query}\n{value}\n")
-            formatted["web"] = "\n".join(web_parts)
+        if "openalex" in results and results["openalex"]:
+            openalex_parts = []
+            for key, value in results["openalex"].items():
+                openalex_parts.append(f"\n### Query: {key}:\n{value}\n")
+            formatted["openalex"] = "\n".join(openalex_parts)
         else:
-            formatted["web"] = "No web search results available"
+            formatted["openalex"] = "No OpenAlex results available"
+
+        if "ddg" in results and results["ddg"]:
+            ddg_parts = []
+            for key, value in results["ddg"].items():
+                ddg_parts.append(f"\n### Query: {key}:\n{value}\n")
+            formatted["ddg"] = "\n".join(ddg_parts)
+        else:
+            formatted["ddg"] = "No DuckDuckGo results available"
 
         return formatted
 
 
-def main(args=None, topic: str = None, reference: str = None):
+def main(topic: str, reference: str = None, use_docker: bool = None):
     """
-    Main entry point for Deep Research.
+    Main entry point for Deep Research (Docker-independent).
 
     Args:
-        args: Optional arguments (ignored for deep research)
         topic: The research topic/question
-        reference: Optional reference papers (not required for deep research)
+        reference: Optional reference papers (not used in Deep Research mode)
+        use_docker: Whether to use Docker (not used - Deep Research is Docker-independent)
     """
     if not topic:
         return "Error: Topic is required for deep research"
-
-    web_env = None
-    if BROWSER_ENV_AVAILABLE:
-        try:
-            local_root = os.path.join(os.getcwd(), "workplace_paper")
-            os.makedirs(local_root, exist_ok=True)
-
-            container_name = "deep_research_" + str(os.getpid())
-
-            env_config = DockerConfig(
-                container_name=container_name,
-                workplace_name=DOCKER_WORKPLACE_NAME,
-                communication_port=12345,
-                local_root=local_root,
-            )
-            code_env = DockerEnv(env_config)
-            code_env.init_container()
-
-            web_env = BrowserEnv(
-                browsergym_eval_env=None,
-                local_root=env_config.local_root,
-                workplace_name=env_config.workplace_name,
-            )
-        except Exception as e:
-            print(f"Warning: Failed to initialize web environment: {e}")
-            print("Web search will be skipped.")
-    else:
-        print("Warning: browsergym not available. Web search will be skipped.")
 
     async def run_research():
         flow = DeepResearchFlow(
             cache_path=None,
             log_path=None,
             model=CHEEP_MODEL,
-            web_env=web_env,
         )
         result = await flow.research(topic=topic)
         return result
@@ -409,12 +393,14 @@ def main(args=None, topic: str = None, reference: str = None):
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Deep Research Module")
+    parser = argparse.ArgumentParser(
+        description="Deep Research Module (Docker-independent)"
+    )
     parser.add_argument(
         "--topic", type=str, required=True, help="Research topic/question"
     )
     parser.add_argument(
-        "--model", type=str, default="gpt-4o-2024-08-06", help="Model to use"
+        "--model", type=str, default=None, help="Model to use (default: CHEEP_MODEL)"
     )
 
     args = parser.parse_args()

@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import random
 import time
+from collections import deque
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -11,14 +12,84 @@ import requests
 from research_agent.inno.registry import register_tool
 
 OPENALEX_BASE = "https://api.openalex.org"
+OPENALEX_API_KEY = os.getenv("OPENALEX_API_KEY", None)
 
 DEFAULT_SELECT = (
     "id,doi,title,primary_location,publication_year,abstract_inverted_index"
 )
 
 
+# OpenAlex API Rate Limiter (free tier: 100 req/s, 100000 credits/day)
+class OpenAlexRateLimiter:
+    """OpenAlex API rate limiter for free tier."""
+
+    def __init__(self, max_per_second: int = 50, daily_credits: int = 100000):
+        self.max_per_second = max_per_second  # conservative limit (100 req/s is max)
+        self.daily_credits = daily_credits
+        self.credits_used = 0
+        self.request_times = deque()
+        self.daily_reset = self._get_next_midnight()
+
+    def _get_next_midnight(self) -> float:
+        import datetime
+
+        now = datetime.datetime.now()
+        tomorrow = now.replace(
+            hour=0, minute=0, second=0, microsecond=0
+        ) + datetime.timedelta(days=1)
+        return tomorrow.timestamp()
+
+    def _prune_old_requests(self):
+        """Remove requests older than 1 second."""
+        import time
+
+        now = time.time()
+        while self.request_times and now - self.request_times[0] > 1.0:
+            self.request_times.popleft()
+
+    def acquire(self, credits: int = 10):
+        """Wait if necessary to stay within rate limits."""
+        import time
+
+        now = time.time()
+
+        # Reset daily if needed
+        if now >= self.daily_reset:
+            self.credits_used = 0
+            self.daily_reset = self._get_next_midnight()
+
+        # Check daily limit
+        if self.credits_used + credits > self.daily_credits:
+            wait_time = self.daily_reset - now + 1
+            print(f"[OpenAlex] Daily credit limit reached. Waiting {wait_time:.0f}s...")
+            time.sleep(wait_time)
+            self.credits_used = 0
+            self.daily_reset = self._get_next_midnight()
+
+        # Check per-second limit
+        self._prune_old_requests()
+        if len(self.request_times) >= self.max_per_second:
+            wait_time = 1.0 - (now - self.request_times[0])
+            if wait_time > 0:
+                print(f"[OpenAlex] Rate limit (50/s). Waiting {wait_time:.2f}s...")
+                time.sleep(wait_time)
+                self._prune_old_requests()
+
+        self.request_times.append(now)
+        self.credits_used += credits
+
+
+# Global rate limiter instance (free API key: $1/day budget, 100 req/s)
+_openalex_limiter = OpenAlexRateLimiter(max_per_second=100, daily_credits=100000)
+
+
 class OpenAlexAPIError(RuntimeError):
     pass
+
+
+def _get_openalex_api_key() -> Optional[str]:
+    """Get OpenAlex API key from environment variable."""
+    return os.getenv("OPENALEX_API_KEY") or None
 
 
 def _openalex_get(
@@ -29,6 +100,9 @@ def _openalex_get(
     timeout_s: int = 30,
     max_retries: int = 5,
 ) -> Dict[str, Any]:
+    # Acquire rate limit (list request = 10 credits)
+    _openalex_limiter.acquire(credits=10)
+
     url = f"{OPENALEX_BASE}{path}"
     headers = {"Accept": "application/json", "User-Agent": user_agent}
 
@@ -36,6 +110,8 @@ def _openalex_get(
         resp = requests.get(url, params=params, headers=headers, timeout=timeout_s)
 
         if 200 <= resp.status_code < 300:
+            # Update rate limits from response headers
+            _update_rate_limits_from_headers(resp.headers)
             return resp.json()
 
         if resp.status_code == 429 or 500 <= resp.status_code < 600:
@@ -49,6 +125,31 @@ def _openalex_get(
         raise OpenAlexAPIError(f"OpenAlex API error: {resp.status_code} {resp.text}")
 
     raise OpenAlexAPIError("Unexpected retry loop exit")
+
+
+def _update_rate_limits_from_headers(headers: dict):
+    """Update rate limiter from API response headers."""
+    # OpenAlex returns rate limit info in headers
+    # Example: X-RateLimit-Remaining, X-RateLimit-Limit, X-RateLimit-Budget
+    remaining = headers.get("X-RateLimit-Remaining")
+    limit = headers.get("X-RateLimit-Limit")
+    budget = headers.get("X-RateLimit-Budget")
+
+    if budget is not None:
+        try:
+            daily_credits = int(budget)
+            _openalex_limiter.daily_credits = daily_credits
+            print(f"[OpenAlex] Daily budget updated: {daily_credits} credits")
+        except (ValueError, TypeError):
+            pass
+
+    if limit is not None:
+        try:
+            rps_limit = int(limit)
+            _openalex_limiter.max_per_second = min(rps_limit, 100)
+            print(f"[OpenAlex] Rate limit updated: {rps_limit}/s")
+        except (ValueError, TypeError):
+            pass
 
 
 def _abstract_inverted_index_to_text(
@@ -226,6 +327,7 @@ def openalex_search_papers(
     year_to: Optional[int] = None,
     primary_source: Optional[str] = None,
     max_results: int = 20,
+    api_key: Optional[str] = None,
 ) -> str:
     """
     학술 논문 검색 (단순화된 인터페이스).
@@ -236,10 +338,13 @@ def openalex_search_papers(
         year_to: 종료 연도
         primary_source: 주요 출처 (예: "Nature", "Science", "Cell")
         max_results: 최대 결과 수
+        api_key: OpenAlex API 키 (환경변수 OPENALEX_API_KEY也可)
 
     Returns:
         포맷된 검색 결과 문자열
     """
+    api_key = api_key or _get_openalex_api_key()
+
     filters_parts = []
     if year_from:
         filters_parts.append(f"publication_year:>={year_from}")
@@ -256,6 +361,7 @@ def openalex_search_papers(
         sort="publication_year:desc",
         per_page=min(max_results, 200),
         max_items=max_results,
+        api_key=api_key,
     )
 
     items = result.get("items", [])

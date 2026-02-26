@@ -3,7 +3,7 @@ import json
 import asyncio
 import argparse
 import os
-from typing import List, Dict, Any, Union
+from typing import List, Dict, Any, Union, Optional
 
 from tqdm import tqdm
 from pydantic import BaseModel, Field
@@ -36,6 +36,12 @@ def get_args():
     parser.add_argument("--cache_path", type=str, default="cache")
     parser.add_argument("--port", type=int, default=12345)
     parser.add_argument("--max_iter_times", type=int, default=0)
+    parser.add_argument(
+        "--use_docker",
+        type=bool,
+        default=True,
+        help="Use Docker for code execution (default: True)",
+    )
     args = parser.parse_args()
     return args
 
@@ -81,9 +87,9 @@ class InnoFlow(FlowModule):
         cache_path: str,
         log_path: Union[str, None, MetaChainLogger] = None,
         model: str = "gpt-4o-2024-08-06",
-        code_env: DockerEnv = None,
-        web_env: BrowserEnv = None,
-        file_env: RequestsMarkdownBrowser = None,
+        code_env: Optional[DockerEnv] = None,
+        web_env: Optional[BrowserEnv] = None,
+        file_env: Optional[RequestsMarkdownBrowser] = None,
     ):
         super().__init__(cache_path, log_path, model)
 
@@ -543,6 +549,8 @@ def main(args, ideas, references, task_instructions=None):
 
     Query-based mode: Pass ideas, references and task_instructions directly as strings
     """
+    use_docker = getattr(args, "use_docker", True)
+
     # Query 기반 모드: source_papers 사용
     instance_id = "query_based"
 
@@ -553,41 +561,47 @@ def main(args, ideas, references, task_instructions=None):
         + "_"
         + COMPLETION_MODEL.replace("/", "__").replace(":", "_"),
     )
-    container_name = (
-        args.container_name
-        + "_"
-        + instance_id
-        + "_"
-        + COMPLETION_MODEL.replace("/", "__").replace(":", "_")
-    )
     os.makedirs(local_root, exist_ok=True)
 
-    env_config = DockerConfig(
-        container_name=container_name,
-        workplace_name=args.workplace_name,
-        communication_port=args.port,
-        local_root=local_root,
-    )
+    code_env = None
+    web_env = None
+    file_env = None
 
-    code_env = DockerEnv(env_config)
-    code_env.init_container()
-    global_state.CODE_ENV = code_env
+    if use_docker:
+        container_name = (
+            args.container_name
+            + "_"
+            + instance_id
+            + "_"
+            + COMPLETION_MODEL.replace("/", "__").replace(":", "_")
+        )
 
-    # setup_dataset(args.category, code_env.local_workplace)
+        env_config = DockerConfig(
+            container_name=container_name,
+            workplace_name=args.workplace_name,
+            communication_port=args.port,
+            local_root=local_root,
+        )
 
-    web_env = BrowserEnv(
-        browsergym_eval_env=None,
-        local_root=env_config.local_root,
-        workplace_name=env_config.workplace_name,
-    )
-    file_env = RequestsMarkdownBrowser(
-        viewport_size=1024 * 4,
-        local_root=env_config.local_root,
-        workplace_name=env_config.workplace_name,
-        downloads_folder=os.path.join(
-            env_config.local_root, env_config.workplace_name, "downloads"
-        ),
-    )
+        code_env = DockerEnv(env_config)
+        code_env.init_container()
+        global_state.CODE_ENV = code_env
+
+        web_env = BrowserEnv(
+            browsergym_eval_env=None,
+            local_root=env_config.local_root,
+            workplace_name=env_config.workplace_name,
+        )
+        file_env = RequestsMarkdownBrowser(
+            viewport_size=1024 * 4,
+            local_root=env_config.local_root,
+            workplace_name=env_config.workplace_name,
+            downloads_folder=os.path.join(
+                env_config.local_root, env_config.workplace_name, "downloads"
+            ),
+        )
+    else:
+        print("[INFO] Running in LOCAL mode (no Docker)")
 
     flow = InnoFlow(
         cache_path=os.path.join(
