@@ -19,13 +19,18 @@ from research_agent.inno import MetaChain
 from research_agent.constant import DOCKER_WORKPLACE_NAME, COMPLETION_MODEL, CHEEP_MODEL
 from research_agent.inno.util import single_select_menu, extract_json_from_output
 from research_agent.inno.environment.docker_env import DockerEnv, DockerConfig
-from research_agent.inno.environment.browser_env import BrowserEnv
+from research_agent.inno.environment.local_env import LocalEnv, LocalConfig
 from research_agent.inno.environment.markdown_browser import RequestsMarkdownBrowser
 from research_agent.inno.logger import MetaChainLogger
 from research_agent.inno.environment.utils import setup_dataset
 
 # 핵심: registry만 사용
 from research_agent.inno.registry import get_agent_factory, get_tool
+
+# Registry bootstrap
+from app_bootstrap import bootstrap_registry
+
+bootstrap_registry()
 
 
 def get_args():
@@ -38,11 +43,39 @@ def get_args():
     parser.add_argument("--max_iter_times", type=int, default=0)
     parser.add_argument(
         "--use_docker",
-        type=bool,
-        default=True,
-        help="Use Docker for code execution (default: True)",
+        type=str,
+        default="true",
+        choices=["true", "false"],
+        help="Use Docker for code execution (default: true)",
+    )
+    parser.add_argument(
+        "--conda_path",
+        type=str,
+        default=None,
+        help="Path to conda installation (for local mode)",
+    )
+    parser.add_argument(
+        "--use_conda",
+        type=str,
+        default="false",
+        choices=["true", "false"],
+        help="Use conda for Python execution instead of uv (default: false)",
+    )
+    parser.add_argument(
+        "--uv_path",
+        type=str,
+        default=None,
+        help="Path to uv (default: uv)",
+    )
+    parser.add_argument(
+        "--venv_path",
+        type=str,
+        default=None,
+        help="Path to uv virtual environment (for uv mode)",
     )
     args = parser.parse_args()
+    args.use_docker = args.use_docker.lower() == "true"
+    args.use_conda = args.use_conda.lower() == "true"
     return args
 
 
@@ -88,7 +121,6 @@ class InnoFlow(FlowModule):
         log_path: Union[str, None, MetaChainLogger] = None,
         model: str = "gpt-4o-2024-08-06",
         code_env: Optional[DockerEnv] = None,
-        web_env: Optional[BrowserEnv] = None,
         file_env: Optional[RequestsMarkdownBrowser] = None,
     ):
         super().__init__(cache_path, log_path, model)
@@ -124,9 +156,7 @@ class InnoFlow(FlowModule):
             cache_path,
         )
         self.judge_agent = AgentModule(
-            get_judge_agent(
-                model=CHEEP_MODEL, code_env=code_env, web_env=web_env, file_env=file_env
-            ),
+            get_judge_agent(model=CHEEP_MODEL, code_env=code_env, file_env=file_env),
             self.client,
             cache_path,
         )
@@ -564,7 +594,6 @@ def main(args, ideas, references, task_instructions=None):
     os.makedirs(local_root, exist_ok=True)
 
     code_env = None
-    web_env = None
     file_env = None
 
     if use_docker:
@@ -587,11 +616,6 @@ def main(args, ideas, references, task_instructions=None):
         code_env.init_container()
         global_state.CODE_ENV = code_env
 
-        web_env = BrowserEnv(
-            browsergym_eval_env=None,
-            local_root=env_config.local_root,
-            workplace_name=env_config.workplace_name,
-        )
         file_env = RequestsMarkdownBrowser(
             viewport_size=1024 * 4,
             local_root=env_config.local_root,
@@ -602,6 +626,24 @@ def main(args, ideas, references, task_instructions=None):
         )
     else:
         print("[INFO] Running in LOCAL mode (no Docker)")
+        local_config = LocalConfig(
+            workplace_name=args.workplace_name,
+            local_root=local_root,
+            conda_path=args.conda_path,
+            use_uv=not args.use_conda,
+            uv_path=args.uv_path,
+            venv_path=args.venv_path,
+        )
+        code_env = LocalEnv(local_config)
+        code_env.init_local()
+        global_state.CODE_ENV = code_env
+
+        file_env = RequestsMarkdownBrowser(
+            viewport_size=1024 * 4,
+            local_root=local_root,
+            workplace_name=args.workplace_name,
+            downloads_folder=os.path.join(local_root, args.workplace_name, "downloads"),
+        )
 
     flow = InnoFlow(
         cache_path=os.path.join(
@@ -614,7 +656,6 @@ def main(args, ideas, references, task_instructions=None):
         ),
         log_path="log_" + instance_id,
         code_env=code_env,
-        web_env=web_env,
         file_env=file_env,
         model=args.model,
     )
