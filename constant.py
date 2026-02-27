@@ -64,7 +64,6 @@ if EVAL_MODE:
 MODULE_DESCRIPTIONS = {
     "Detailed Idea Description": "At this level, users provide comprehensive descriptions of their specific research ideas. The system processes these detailed inputs to develop implementation strategies based on the user's explicit requirements. Examples 1-2 are the templates of this mode.",
     "Reference-Based Ideation": "This simpler level involves users submitting reference papers without a specific idea in mind. The user query typically follows the format: 'I have some reference papers, please come up with an innovative idea and implement it with these papers.' The system then analyzes the provided references to generate and develop novel research concepts. Examples 3-4 are the templates of this mode.",
-    "Paper Generation Agent": "Once all research and experimental work is finished, employ this agent for paper generation",
     "Deep Research": "Use this mode for comprehensive web-based research on any topic. No ML implementation or code execution required. Enter your research question and get detailed findings with sources.",
 }
 

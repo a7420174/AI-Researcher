@@ -53,42 +53,86 @@ def get_args_research():
     return args
 
 
-def get_args_paper():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--research_field", type=str, default="research")
-    args = parser.parse_args()
-    return args
-
-
 def _extract_keywords_from_topic(topic: str) -> list:
     """
-    Automatically extract search keywords from a topic string.
-    Removes common words and extracts meaningful research-related terms.
+    Extract search keywords from a topic string using LLM.
+    Identifies the most important research-related terms for paper search.
     """
-    topic_cleaned = re.sub(r"[^\w\s-]", " ", topic)
-    words = topic_cleaned.split()
+    import logging
+    import sys
+    import os
 
-    meaningful_words = [
-        word
-        for word in words
-        if len(word.lower().strip("-")) >= 3
-        and word.lower().strip("-") not in STOP_WORDS
-        and not word.isdigit()
-    ]
+    try:
+        current_file_path = os.path.realpath(__file__)
+        current_dir = os.path.dirname(current_file_path)
+        sub_dir = os.path.join(current_dir, "research_agent")
+        sys.path.insert(0, sub_dir)
 
-    if len(meaningful_words) >= 2:
-        two_word_phrases = [
-            f"{meaningful_words[i]} {meaningful_words[i + 1]}"
-            for i in range(len(meaningful_words) - 1)
+        from research_agent.constant import CHEEP_MODEL
+        from openai import OpenAI
+
+        client = OpenAI()
+
+        prompt = f"""Extract the most important research keywords from the following topic for academic paper search.
+
+Topic: {topic}
+
+Your task:
+1. Identify 3-5 key research concepts or terms that are most relevant for finding academic papers
+2. Include important technical terms, methods, algorithms, or domain-specific concepts
+3. Exclude common words like "research", "study", "analysis", "paper", "method", "approach"
+4. Return ONLY the keywords, one per line, no numbering or bullets
+
+Example output for "How to improve image classification using transformer attention":
+transformer
+attention mechanism
+image classification
+Vision Transformer
+convolutional neural network"""
+
+        response = client.chat.completions.create(
+            model=CHEEP_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+        )
+
+        keywords_text = response.choices[0].message.content.strip()
+        keywords = [line.strip() for line in keywords_text.split("\n") if line.strip()]
+
+        logging.info(f"LLM extracted keywords: {keywords}")
+        return keywords
+
+    except Exception as e:
+        logging.warning(
+            f"LLM keyword extraction failed: {e}. Using fallback regex method."
+        )
+
+        # Fallback to regex-based extraction
+        topic_cleaned = re.sub(r"[^\w\s-]", " ", topic)
+        words = topic_cleaned.split()
+
+        meaningful_words = [
+            word
+            for word in words
+            if len(word.lower().strip("-")) >= 3
+            and word.lower().strip("-") not in STOP_WORDS
+            and not word.isdigit()
         ]
-        return two_word_phrases + meaningful_words
 
-    return meaningful_words[:5] if meaningful_words else [topic]
+        if len(meaningful_words) >= 2:
+            two_word_phrases = [
+                f"{meaningful_words[i]} {meaningful_words[i + 1]}"
+                for i in range(len(meaningful_words) - 1)
+            ]
+            return two_word_phrases + meaningful_words
+
+        return meaningful_words[:5] if meaningful_words else [topic]
 
 
 def _find_references_for_topic(topic: str) -> str:
     """
     Find relevant reference papers for a given topic using available search tools.
+    Uses BioMCP and OpenAlex to find papers.
     Returns a string of found references in a format suitable for the research agents.
     """
     import logging
@@ -102,7 +146,6 @@ def _find_references_for_topic(topic: str) -> str:
         os.chdir(sub_dir)
 
         from research_agent.inno.registry import get_tool
-        from research_agent.inno.tools.arxiv import search_arxiv
 
         keywords = _extract_keywords_from_topic(topic)
 
@@ -111,20 +154,20 @@ def _find_references_for_topic(topic: str) -> str:
         ]
         search_keywords = [kw for kw in keywords if kw not in genes]
 
-        for keyword in search_keywords[:5]:
-            try:
-                arxiv_results = search_arxiv(keyword, max_results=5)
-                if arxiv_results and isinstance(arxiv_results, list):
-                    for item in arxiv_results[:3]:
-                        if isinstance(item, dict):
-                            title = item.get("title", "")
-                            arxiv_id = item.get("id", "")
-                            if title and arxiv_id:
-                                ref = f"{title} (arXiv: {arxiv_id})"
-                                references.append(ref)
-            except Exception as e:
-                logging.warning(f"ArXiv search failed for '{keyword}': {e}")
+        # Try OpenAlex first for academic papers
+        try:
+            openalex_search_papers = get_tool("openalex_search_papers")
+            for keyword in search_keywords[:5]:
+                try:
+                    result = openalex_search_papers(query=keyword, limit=5)
+                    if result and "Error" not in str(result):
+                        references.append(f"OpenAlex Search for '{keyword}':\n{result}")
+                except Exception as e:
+                    logging.warning(f"OpenAlex search failed for '{keyword}': {e}")
+        except Exception as e:
+            logging.warning(f"OpenAlex tools not available: {e}")
 
+        # Try BioMCP for biomedical papers
         try:
             biomcp_article_search = get_tool("biomcp_article_search")
             for gene in genes[:3]:
@@ -137,19 +180,35 @@ def _find_references_for_topic(topic: str) -> str:
         except Exception as e:
             logging.warning(f"BioMCP tools not available: {e}")
 
-        if not search_keywords and not genes:
+        # Try arxiv as fallback
+        try:
+            from research_agent.inno.tools.arxiv import search_arxiv
+
+            for keyword in search_keywords[:5]:
+                try:
+                    arxiv_results = search_arxiv(keyword, max_results=5)
+                    if arxiv_results and isinstance(arxiv_results, list):
+                        for item in arxiv_results[:3]:
+                            if isinstance(item, dict):
+                                title = item.get("title", "")
+                                arxiv_id = item.get("id", "")
+                                if title and arxiv_id:
+                                    ref = f"{title} (arXiv: {arxiv_id})"
+                                    references.append(ref)
+                except Exception as e:
+                    logging.warning(f"ArXiv search failed for '{keyword}': {e}")
+        except Exception as e:
+            logging.warning(f"ArXiv tools not available: {e}")
+
+        # If no results, try full topic search with OpenAlex
+        if not references:
             try:
-                arxiv_results = search_arxiv(topic, max_results=10)
-                if arxiv_results and isinstance(arxiv_results, list):
-                    for item in arxiv_results[:5]:
-                        if isinstance(item, dict):
-                            title = item.get("title", "")
-                            arxiv_id = item.get("id", "")
-                            if title and arxiv_id:
-                                ref = f"{title} (arXiv: {arxiv_id})"
-                                references.append(ref)
+                openalex_search_papers = get_tool("openalex_search_papers")
+                result = openalex_search_papers(query=topic, limit=10)
+                if result and "Error" not in str(result):
+                    references.append(f"OpenAlex Search for '{topic}':\n{result}")
             except Exception as e:
-                logging.warning(f"ArXiv search failed for topic '{topic}': {e}")
+                logging.warning(f"OpenAlex topic search failed: {e}")
 
     except Exception as e:
         logging.warning(f"Error finding references: {e}")
@@ -281,19 +340,6 @@ def main_ai_researcher(input, reference, mode, use_docker=None):
 
                 return "Research and paper writing completed successfully"
 
-        case "Paper Generation Agent":
-            with InitGuard():
-                from paper_agent import writing
-
-                args = get_args_paper()
-
-                research_field = "general"
-                args.research_field = research_field
-
-                asyncio.run(writing.writing(args.research_field, research_field))
-
-                return "Paper generation completed successfully"
-
         case "Deep Research":
             with InitGuard():
                 current_file_path = os.path.realpath(__file__)
@@ -304,10 +350,29 @@ def main_ai_researcher(input, reference, mode, use_docker=None):
                 from research_agent import run_deep_research
 
                 result_info = run_deep_research.main(topic=input, reference=reference)
+
                 # Handle both old string return and new dict return
                 if isinstance(result_info, dict):
                     result = result_info.get("result", "")
-                    # Optionally run writing for deep research (may not have full project)
-                    # For now, just return the research result
-                    return result
+
+                    # Run paper writing based on deep research results
+                    from paper_agent import writing
+
+                    research_field = "general"
+                    instance_id = "deep_research"
+
+                    # For deep research, we save the result to a file that can be used by writing module
+                    import json
+
+                    result_dir = f"./paper_agent/{research_field}/{instance_id}"
+                    os.makedirs(result_dir, exist_ok=True)
+                    with open(
+                        os.path.join(result_dir, "deep_research_result.json"), "w"
+                    ) as f:
+                        json.dump({"result": result, "topic": input}, f)
+
+                    # Run paper writing
+                    asyncio.run(writing.writing(research_field, instance_id))
+
+                    return f"Deep research and paper writing completed successfully. Result saved to {result_dir}"
                 return result_info
