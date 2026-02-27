@@ -55,7 +55,7 @@ def get_args_research():
 
 def get_args_paper():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--research_field", type=str, default="vq")
+    parser.add_argument("--research_field", type=str, default="research")
     args = parser.parse_args()
     return args
 
@@ -207,7 +207,24 @@ def main_ai_researcher(input, reference, mode, use_docker=None):
                 args.max_iter_times = max_iter_times
                 args.use_docker = use_docker
 
-                run_infer_plan.main(args, input, found_reference or reference, input)
+                project_info = run_infer_plan.main(
+                    args, input, found_reference or reference, input
+                )
+
+                # After research completes, run writing module
+                from paper_agent import writing
+
+                research_field = "general"
+                asyncio.run(
+                    writing.writing(
+                        research_field,
+                        project_info.get("instance_id", "query_based"),
+                        agent_dir=project_info.get("agent_dir"),
+                        model_dir=project_info.get("model_dir"),
+                    )
+                )
+
+                return "Research and paper writing completed successfully"
 
         case "Reference-Based Ideation":
             found_reference = reference
@@ -245,7 +262,24 @@ def main_ai_researcher(input, reference, mode, use_docker=None):
                 args.max_iter_times = max_iter_times
                 args.use_docker = use_docker
 
-                run_infer_idea.main(args, found_reference or reference, input)
+                project_info = run_infer_idea.main(
+                    args, found_reference or reference, input
+                )
+
+                # After research completes, run writing module
+                from paper_agent import writing
+
+                research_field = "general"
+                asyncio.run(
+                    writing.writing(
+                        research_field,
+                        project_info.get("instance_id", "query_based"),
+                        agent_dir=project_info.get("agent_dir"),
+                        model_dir=project_info.get("model_dir"),
+                    )
+                )
+
+                return "Research and paper writing completed successfully"
 
         case "Paper Generation Agent":
             with InitGuard():
@@ -258,6 +292,8 @@ def main_ai_researcher(input, reference, mode, use_docker=None):
 
                 asyncio.run(writing.writing(args.research_field, research_field))
 
+                return "Paper generation completed successfully"
+
         case "Deep Research":
             with InitGuard():
                 current_file_path = os.path.realpath(__file__)
@@ -267,5 +303,11 @@ def main_ai_researcher(input, reference, mode, use_docker=None):
 
                 from research_agent import run_deep_research
 
-                result = run_deep_research.main(topic=input, reference=reference)
-                return result
+                result_info = run_deep_research.main(topic=input, reference=reference)
+                # Handle both old string return and new dict return
+                if isinstance(result_info, dict):
+                    result = result_info.get("result", "")
+                    # Optionally run writing for deep research (may not have full project)
+                    # For now, just return the research result
+                    return result
+                return result_info

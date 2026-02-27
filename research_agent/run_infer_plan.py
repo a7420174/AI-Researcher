@@ -578,6 +578,9 @@ def main(args, ideas, references, task_instructions=None):
         task_instructions: task instructions string (for query-based mode)
 
     Query-based mode: Pass ideas, references and task_instructions directly as strings
+
+    Returns:
+        dict: Project information including agent_dir and model_dir paths
     """
     use_docker = getattr(args, "use_docker", True)
 
@@ -672,6 +675,18 @@ def main(args, ideas, references, task_instructions=None):
     }
 
     asyncio.run(flow(**flow_kwargs))
+
+    # Return project information for writing module
+    agent_dir = os.path.join(local_root, args.workplace_name)
+    model_dir = os.path.join(local_root, args.workplace_name, "project")
+
+    return {
+        "instance_id": instance_id,
+        "local_root": local_root,
+        "agent_dir": agent_dir,
+        "model_dir": model_dir,
+        "workplace_name": args.workplace_name,
+    }
 
 
 if __name__ == "__main__":

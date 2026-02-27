@@ -4,9 +4,11 @@ import asyncio
 import logging
 from tqdm import tqdm
 import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from benchmark_collection.utils.openai_utils import GPTClient
+from paper_agent.gpt_client import GPTClient
 from paper_agent.section_composer import SectionComposer, setup_logging
+
 
 class IntroductionComposer(SectionComposer):
     def __init__(self, research_field: str, structure_iterations: int = 3):
@@ -17,28 +19,10 @@ class IntroductionComposer(SectionComposer):
         normalized_title = self.normalize_title(target_paper)
         section_path = f"{self.research_field}/target_sections/{normalized_title}/{section_name}.tex"
         try:
-            with open(section_path, 'r', encoding='utf-8') as f:
+            with open(section_path, "r", encoding="utf-8") as f:
                 return f.read()
         except FileNotFoundError:
             logging.warning(f"Section file {section_path} not found")
-            return ""
-
-    def find_task1_content(self, benchmark_path: str, target_paper: str) -> str:
-        """Find the task1 content for the target paper from benchmark dataset"""
-        try:
-            with open(benchmark_path, 'r', encoding='utf-8') as f:
-                benchmark_data = json.load(f)
-            
-            # target_paper_lower = target_paper.lower()
-            # for paper in benchmark_data:
-            #     if paper['target'].lower() == target_paper_lower:
-            #         return paper.get('task1', '')
-            return benchmark_data['task1']
-            
-            logging.warning(f"No matching paper found for: {target_paper}")
-            return ""
-        except Exception as e:
-            logging.error(f"Error reading benchmark file: {str(e)}")
             return ""
 
     async def generate_or_revise_structure(self, content, current_structure, iteration):
@@ -86,7 +70,9 @@ Output only the LaTeX structure with comments as specified above."""
 
         return await self.gpt_client.chat(prompt=prompt)
 
-    async def detailize_subsection(self, structure, current_text, content, subsection=None):
+    async def detailize_subsection(
+        self, structure, current_text, content, subsection=None
+    ):
         writing_template = self.get_random_template()
         prompt = f"""Write a comprehensive introduction section based on the provided structure and content.
 
@@ -184,49 +170,33 @@ Output the revised introduction section incorporating all these improvements. Re
 
         return await self.gpt_client.chat(prompt=prompt)
 
-    async def compose_section(self, benchmark_path: str, target_paper: str) -> str:
-        checkpoint_dir = self.get_checkpoint_path(target_paper)
-        os.makedirs(checkpoint_dir, exist_ok=True)
-
+    async def compose_section(self, target_paper: str) -> str:
         # Read existing sections
         methodology = self.read_section_content(target_paper, "methodology")
         related_work = self.read_section_content(target_paper, "related_work")
         experiments = self.read_section_content(target_paper, "experiments")
-        content_bundle = methodology + '\n\n' + experiments + '\n\n' + related_work
-
-        # Get task1 content from benchmark
-        task1_content = self.find_task1_content(benchmark_path, target_paper)
+        content_bundle = methodology + "\n\n" + experiments + "\n\n" + related_work
 
         # Step 1: Iterative structure generation
         structure = ""
-        structure_checkpoint = self.load_checkpoint(target_paper, "structure")
-        
-        if structure_checkpoint:
-            structure = structure_checkpoint["final_structure"]
-            logging.info("Loaded structure from checkpoint")
-        else:
-            for iteration in range(self.structure_iterations):
-                logging.info(f"Structure iteration {iteration + 1}/{self.structure_iterations}")
-                
-                structure = await self.generate_or_revise_structure(
-                    content_bundle, structure, iteration + 1)
-                
-                if task1_content:
-                    structure = await self.generate_or_revise_structure(
-                        task1_content, structure, iteration + 1)
-                
-                self.write_temp_log(structure, f"iteration_{iteration+1}_final")
-            
-            self.save_checkpoint(target_paper, "structure", {
-                "final_structure": structure
-            })
+
+        for iteration in range(self.structure_iterations):
+            logging.info(
+                f"Structure iteration {iteration + 1}/{self.structure_iterations}"
+            )
+
+            structure = await self.generate_or_revise_structure(
+                content_bundle, structure, iteration + 1
+            )
+
+            self.write_temp_log(structure, f"iteration_{iteration + 1}_final")
 
         # Step 2: Write complete introduction
         introduction = ""
-        introduction = await self.detailize_subsection(structure, content_bundle, introduction)
-        if task1_content:
-            introduction = await self.detailize_subsection(structure, task1_content, introduction)
-            
+        introduction = await self.detailize_subsection(
+            structure, content_bundle, introduction
+        )
+
         self.write_temp_log(introduction, "initial_introduction")
 
         # Step 3: Final writing checklist
@@ -237,28 +207,28 @@ Output the revised introduction section incorporating all these improvements. Re
         output_dir = f"{self.research_field}/target_sections/{self.normalize_title(target_paper)}"
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, "introduction.tex")
-        
-        with open(output_path, 'w', encoding='utf-8') as f:
+
+        with open(output_path, "w", encoding="utf-8") as f:
             f.write(final_introduction)
         logging.info(f"Saved final introduction to {output_path}")
 
         return final_introduction
 
+
 async def introduction_composing(research_field: str, instance_id: str):
     setup_logging(research_field)
-    
-    composer = IntroductionComposer(research_field=research_field, structure_iterations=1)
-    
-    # target_paper = 'Heterogeneous Graph Contrastive Learning for Recommendation'
-    # benchmark_path = '../benchmark_collection/advance_graph/merged_papers_with_fields.json'
-    # benchmark_path = f"/data2/tjb/Inno-agent/benchmark/final/{research_field}/{instance_id}.json"
-    benchmark_path = f'./benchmark/final/{research_field}/{instance_id}.json'
+
+    composer = IntroductionComposer(
+        research_field=research_field, structure_iterations=1
+    )
+
     try:
-        introduction = await composer.compose_section(benchmark_path, instance_id)
+        introduction = await composer.compose_section(instance_id)
         logging.info("Introduction composition completed")
     except Exception as e:
         logging.error(f"Error during introduction composition: {str(e)}")
         raise
+
 
 if __name__ == "__main__":
     asyncio.run(introduction_composing())

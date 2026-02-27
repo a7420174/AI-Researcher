@@ -4,10 +4,12 @@ import asyncio
 import logging
 from tqdm import tqdm
 import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from benchmark_collection.utils.openai_utils import GPTClient
+from paper_agent.gpt_client import GPTClient
 from paper_agent.section_composer import SectionComposer, setup_logging
 import shutil
+
 
 class AbstractComposer(SectionComposer):
     def __init__(self, research_field: str, structure_iterations: int = 2):
@@ -18,7 +20,7 @@ class AbstractComposer(SectionComposer):
         normalized_title = self.normalize_title(target_paper)
         section_path = f"{self.research_field}/target_sections/{normalized_title}/{section_name}.tex"
         try:
-            with open(section_path, 'r', encoding='utf-8') as f:
+            with open(section_path, "r", encoding="utf-8") as f:
                 return f.read()
         except FileNotFoundError:
             logging.warning(f"Section file {section_path} not found")
@@ -151,36 +153,37 @@ Output the revised abstract section incorporating all these improvements. Reply 
         introduction = self.read_section_content(target_paper, "introduction")
         methodology = self.read_section_content(target_paper, "methodology")
         experiments = self.read_section_content(target_paper, "experiments")
-        content_bundle = introduction + '\n\n' + methodology + '\n\n' + experiments
+        content_bundle = introduction + "\n\n" + methodology + "\n\n" + experiments
 
         # Step 1: Iterative structure generation
         structure = ""
         structure_checkpoint = self.load_checkpoint(target_paper, "structure")
-        
+
         if structure_checkpoint:
             structure = structure_checkpoint["final_structure"]
             logging.info("Loaded structure from checkpoint")
         else:
             for iteration in range(self.structure_iterations):
-                logging.info(f"Structure iteration {iteration + 1}/{self.structure_iterations}")
+                logging.info(
+                    f"Structure iteration {iteration + 1}/{self.structure_iterations}"
+                )
                 structure = await self.generate_or_revise_structure(
-                    content_bundle, structure, iteration + 1)
-                self.write_temp_log(structure, f"iteration_{iteration+1}_final")
-            
-            self.save_checkpoint(target_paper, "structure", {
-                "final_structure": structure
-            })
+                    content_bundle, structure, iteration + 1
+                )
+                self.write_temp_log(structure, f"iteration_{iteration + 1}_final")
+
+            self.save_checkpoint(
+                target_paper, "structure", {"final_structure": structure}
+            )
 
         # Step 2: Write complete abstract
         final_abstract = await self.detailize_subsection(structure, "", content_bundle)
         self.write_temp_log(final_abstract, "initial_abstract")
 
-        
         # Save final output
         output_dir = f"{self.research_field}/target_sections/{self.normalize_title(target_paper)}"
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, "abstract.tex")
-
 
         dst_dir = output_dir
         src_dir = "./paper_agent/final_paper"
@@ -191,25 +194,27 @@ Output the revised abstract section incorporating all these improvements. Reply 
             # 只复制文件，不复制子文件夹
             if os.path.isfile(src_path):
                 shutil.copy2(src_path, dst_dir)  # copy2 会保留元数据（时间戳等）
-        
-        with open(output_path, 'w', encoding='utf-8') as f:
+
+        with open(output_path, "w", encoding="utf-8") as f:
             f.write(final_abstract)
         logging.info(f"Saved final abstract to {output_path}")
 
         return final_abstract
 
+
 async def abstract_composing(research_field: str, instance_id: str):
     setup_logging(research_field)
-    
+
     composer = AbstractComposer(research_field=research_field, structure_iterations=2)
     # target_paper = 'Heterogeneous Graph Contrastive Learning for Recommendation'
-    
+
     try:
         abstract = await composer.compose_section(instance_id)
         logging.info("Abstract composition completed")
     except Exception as e:
         logging.error(f"Error during abstract composition: {str(e)}")
         raise
+
 
 if __name__ == "__main__":
     asyncio.run(abstract_composing())

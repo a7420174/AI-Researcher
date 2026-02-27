@@ -4,9 +4,11 @@ import asyncio
 import logging
 from tqdm import tqdm
 import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from benchmark_collection.utils.openai_utils import GPTClient
+from paper_agent.gpt_client import GPTClient
 from paper_agent.section_composer import SectionComposer, setup_logging
+
 
 class ConclusionComposer(SectionComposer):
     def __init__(self, research_field: str, structure_iterations: int = 2):
@@ -17,7 +19,7 @@ class ConclusionComposer(SectionComposer):
         normalized_title = self.normalize_title(target_paper)
         section_path = f"{self.research_field}/target_sections/{normalized_title}/{section_name}.tex"
         try:
-            with open(section_path, 'r', encoding='utf-8') as f:
+            with open(section_path, "r", encoding="utf-8") as f:
                 return f.read()
         except FileNotFoundError:
             logging.warning(f"Section file {section_path} not found")
@@ -142,53 +144,60 @@ Output the revised conclusion section incorporating all these improvements. Repl
         introduction = self.read_section_content(target_paper, "introduction")
         methodology = self.read_section_content(target_paper, "methodology")
         experiments = self.read_section_content(target_paper, "experiments")
-        content_bundle = introduction + '\n\n' + methodology + '\n\n' + experiments
+        content_bundle = introduction + "\n\n" + methodology + "\n\n" + experiments
 
         # Step 1: Iterative structure generation
         structure = ""
         structure_checkpoint = self.load_checkpoint(target_paper, "structure")
-        
+
         if structure_checkpoint:
             structure = structure_checkpoint["final_structure"]
             logging.info("Loaded structure from checkpoint")
         else:
             for iteration in range(self.structure_iterations):
-                logging.info(f"Structure iteration {iteration + 1}/{self.structure_iterations}")
+                logging.info(
+                    f"Structure iteration {iteration + 1}/{self.structure_iterations}"
+                )
                 structure = await self.generate_or_revise_structure(
-                    content_bundle, structure, iteration + 1)
-                self.write_temp_log(structure, f"iteration_{iteration+1}_final")
-            
-            self.save_checkpoint(target_paper, "structure", {
-                "final_structure": structure
-            })
+                    content_bundle, structure, iteration + 1
+                )
+                self.write_temp_log(structure, f"iteration_{iteration + 1}_final")
+
+            self.save_checkpoint(
+                target_paper, "structure", {"final_structure": structure}
+            )
 
         # Step 2: Write complete conclusion
-        final_conclusion = await self.detailize_subsection(structure, "", content_bundle)
+        final_conclusion = await self.detailize_subsection(
+            structure, "", content_bundle
+        )
         self.write_temp_log(final_conclusion, "final_conclusion")
 
         # Save final output
         output_dir = f"{self.research_field}/target_sections/{self.normalize_title(target_paper)}"
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, "conclusion.tex")
-        
-        with open(output_path, 'w', encoding='utf-8') as f:
+
+        with open(output_path, "w", encoding="utf-8") as f:
             f.write(final_conclusion)
         logging.info(f"Saved final conclusion to {output_path}")
 
         return final_conclusion
 
+
 async def conclusion_composing(research_field: str, instance_id: str):
     setup_logging(research_field)
-    
+
     composer = ConclusionComposer(research_field=research_field, structure_iterations=2)
     # target_paper = 'Heterogeneous Graph Contrastive Learning for Recommendation'
-    
+
     try:
         conclusion = await composer.compose_section(instance_id)
         logging.info("Conclusion composition completed")
     except Exception as e:
         logging.error(f"Error during conclusion composition: {str(e)}")
         raise
+
 
 if __name__ == "__main__":
     asyncio.run(conclusion_composing())

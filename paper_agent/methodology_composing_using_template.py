@@ -4,11 +4,13 @@ import asyncio
 import logging
 from tqdm import tqdm
 import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
-from benchmark_collection.utils.openai_utils import GPTClient
+from paper_agent.gpt_client import GPTClient
 from paper_agent.section_composer import SectionComposer, setup_logging
+
 
 class MethodologyComposer(SectionComposer):
     def __init__(self, research_field: str, structure_iterations: int = 3):
@@ -18,10 +20,10 @@ class MethodologyComposer(SectionComposer):
         """Combine all Python files in the model directory"""
         combined_code = []
         for filename in os.listdir(model_dir):
-            if filename.endswith('.py'):
-                with open(os.path.join(model_dir, filename), 'r') as f:
+            if filename.endswith(".py"):
+                with open(os.path.join(model_dir, filename), "r") as f:
                     combined_code.append(f"# File: {filename}\n{f.read()}\n")
-        return '\n'.join(combined_code)
+        return "\n".join(combined_code)
 
     async def generate_or_revise_structure(self, content, current_structure, iteration):
         prompt = f"""Based on the given content, generate or revise the technical methodology structure of the proposed method, using latex format.
@@ -90,7 +92,7 @@ Output only the LaTeX structure with comments as specified above. Note again tha
     async def detailize_subsection(self, structure, current_text, content, subsection):
         # Get a random writing template
         writing_template = self.get_random_template()
-        
+
         prompt = f"""Revise or write the following subsection of the methodology section:
 \subsection{{{subsection}}}
 
@@ -206,93 +208,103 @@ Output the revised methodology section incorporating all these improvements whil
 
         return await self.gpt_client.chat(prompt=prompt)
 
-    async def compose_section(self, agent_dir: str, model_dir: str, benchmark_path: str, target_paper: str) -> str:
-        checkpoint_dir = self.get_checkpoint_path(target_paper)
-        os.makedirs(checkpoint_dir, exist_ok=True)
-        
-        agent_files = [
-            'prepare_agent.json',
-            'survey_agent.json',
-            'coding_plan_agent.json',
-            'machine_learning_agent.json',
-            'judge_agent.json',
-            'machine_learning_agent_iter_submit.json',
-            'experiment_analysis_agent_iter_refine_1.json',
-            'machine_learning_agent_iter_refine_1.json',
-        ]
+    async def compose_section(
+        self, agent_dir: str, model_dir: str, target_paper: str
+    ) -> str:
+        # Dynamically get agent files from agent_dir
+        agent_files = []
+        if os.path.exists(agent_dir):
+            agent_files = [f for f in os.listdir(agent_dir) if f.endswith(".json")]
+            agent_files.sort()
+
+        if not agent_files:
+            logging.warning(f"No agent files found in {agent_dir}")
+            return ""
+
+        logging.info(f"Found {len(agent_files)} agent files: {agent_files}")
+
         combined_code = self.read_model_code(model_dir)
 
         # Step 1: Iterative structure generation
         structure = ""
-        structure_checkpoint = self.load_checkpoint(target_paper, "structure")
-        
-        if structure_checkpoint:
-            structure = structure_checkpoint["final_structure"]
-            logging.info("Loaded structure from checkpoint")
-        else:
-            for iteration in range(self.structure_iterations):
-                logging.info(f"Structure iteration {iteration + 1}/{self.structure_iterations}")
-                
-                structure = await self.generate_or_revise_structure(
-                    combined_code, structure, iteration + 1)
 
-                # Process agent files
-                for idx, agent_file in enumerate(tqdm(agent_files, desc="Processing agent files")):
-                    with open(os.path.join(agent_dir, agent_file), 'r') as f:
-                        content = json.load(f) 
-                    structure = await self.generate_or_revise_structure(
-                        json.dumps(content, indent=2), structure, iteration + 1)
-                
-                self.write_temp_log(structure, f"iteration_{iteration+1}_final")
-            
-            self.save_checkpoint(target_paper, "structure", {
-                "final_structure": structure
-            })
+        for iteration in range(self.structure_iterations):
+            logging.info(
+                f"Structure iteration {iteration + 1}/{self.structure_iterations}"
+            )
+
+            structure = await self.generate_or_revise_structure(
+                combined_code, structure, iteration + 1
+            )
+
+            # Process agent files
+            for idx, agent_file in enumerate(
+                tqdm(agent_files, desc="Processing agent files")
+            ):
+                with open(os.path.join(agent_dir, agent_file), "r") as f:
+                    content = json.load(f)
+                structure = await self.generate_or_revise_structure(
+                    json.dumps(content, indent=2), structure, iteration + 1
+                )
+
+            self.write_temp_log(structure, f"iteration_{iteration + 1}_final")
+
+            self.save_checkpoint(
+                target_paper, "structure", {"final_structure": structure}
+            )
 
         # Step 2: Detailize subsections
-        subsections = [line.split('{')[1].split('}')[0] 
-                    for line in structure.split('\n') 
-                    if line.strip().startswith('\\subsection')]
-        
+        subsections = [
+            line.split("{")[1].split("}")[0]
+            for line in structure.split("\n")
+            if line.strip().startswith("\\subsection")
+        ]
+
         subsection_contents = {}
         subsection_checkpoint = self.load_checkpoint(target_paper, "subsections")
-        
+
         if subsection_checkpoint:
             subsection_contents = subsection_checkpoint
             logging.info("Loaded subsection contents from checkpoint")
         else:
-            for subsection_id, subsection in enumerate(tqdm(subsections, desc="Detailizing subsections")):
-                methodology_part = ''
-                
+            for subsection_id, subsection in enumerate(
+                tqdm(subsections, desc="Detailizing subsections")
+            ):
+                methodology_part = ""
+
                 # Process code content
                 methodology_part = await self.detailize_subsection(
-                    structure, methodology_part, combined_code, subsection)
-                self.write_temp_log(
-                    methodology_part,
-                    f"subsection_{subsection_id}_code"
+                    structure, methodology_part, combined_code, subsection
                 )
-                
+                self.write_temp_log(
+                    methodology_part, f"subsection_{subsection_id}_code"
+                )
+
                 # Process agent contents
                 for i, agent_file in enumerate(agent_files):
-                    with open(os.path.join(agent_dir, agent_file), 'r') as f:
+                    with open(os.path.join(agent_dir, agent_file), "r") as f:
                         content = json.load(f)
                     methodology_part = await self.detailize_subsection(
-                        structure, methodology_part, json.dumps(content, indent=2), subsection)
-                    
-                    self.write_temp_log(
+                        structure,
                         methodology_part,
-                        f"subsection_{subsection_id}_agent_{i}"
+                        json.dumps(content, indent=2),
+                        subsection,
                     )
-                    
+
+                    self.write_temp_log(
+                        methodology_part, f"subsection_{subsection_id}_agent_{i}"
+                    )
+
                     subsection_contents[subsection] = methodology_part
-                    self.save_checkpoint(target_paper, "subsections", subsection_contents)
+                    self.save_checkpoint(
+                        target_paper, "subsections", subsection_contents
+                    )
 
         # Step 3: Fuse all subsections
         self.write_temp_log(
-            json.dumps(subsection_contents, indent=2),
-            "pre_fusion_subsections"
+            json.dumps(subsection_contents, indent=2), "pre_fusion_subsections"
         )
-        
+
         fused_methodology = await self.fuse_subsections(structure, subsection_contents)
         self.write_temp_log(fused_methodology, "post_fusion_methodology")
 
@@ -304,40 +316,45 @@ Output the revised methodology section incorporating all these improvements whil
         output_dir = f"{self.research_field}/target_sections/{self.normalize_title(target_paper)}"
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, "methodology.tex")
-        
-        with open(output_path, 'w', encoding='utf-8') as f:
+
+        with open(output_path, "w", encoding="utf-8") as f:
             f.write(final_methodology)
         logging.info(f"Saved final methodology to {output_path}")
 
         return final_methodology
 
-async def methodology_composing(research_field: str, instance_id: str):
-    # research_field = "vq"
-    # instance_id = "rotation_vq"
+
+async def methodology_composing(
+    research_field: str,
+    instance_id: str,
+    agent_dir: str = None,
+    model_dir: str = None,
+):
     setup_logging(research_field)
-    
-    composer = MethodologyComposer(research_field=research_field, structure_iterations=1)
-    
-    # proj_dir = f'/data2/tjb_share/{research_field}/{instance_id}/'
-    proj_dir = f'./paper_agent/{research_field}/{instance_id}/'
-    # target_paper = "Knowledge Graph Self-Supervised Rationalization for Recommendation"
-    # target_paper = 'Heterogeneous Graph Contrastive Learning for Recommendation'
-    cache_dirs = [d for d in os.listdir(proj_dir) if d.startswith('cache_')]
-    if not cache_dirs:
-        raise ValueError("No cache directory found")
-    agent_dir = os.path.join(proj_dir, cache_dirs[-1], 'agents')
-    
-    model_dir = os.path.join(proj_dir, 'workplace/project/model/')
-    # benchmark_path = f'/data2/tjb/Inno-agent/benchmark/final/{research_field}/{instance_id}.json'
-    benchmark_path = f'./benchmark/final/{research_field}/{instance_id}.json'
-    # sss
+
+    composer = MethodologyComposer(
+        research_field=research_field, structure_iterations=1
+    )
+
+    proj_dir = f"./paper_agent/{research_field}/{instance_id}/"
+
+    # Use provided paths or fall back to default
+    if agent_dir is None:
+        cache_dirs = [d for d in os.listdir(proj_dir) if d.startswith("cache_")]
+        if not cache_dirs:
+            raise ValueError("No cache directory found")
+        agent_dir = os.path.join(proj_dir, cache_dirs[-1], "agents")
+
+    if model_dir is None:
+        model_dir = os.path.join(proj_dir, "workplace/project/model/")
+
     try:
-        methodology = await composer.compose_section(
-            agent_dir, model_dir, benchmark_path, instance_id)
+        methodology = await composer.compose_section(agent_dir, model_dir, instance_id)
         logging.info("Methodology composition completed")
     except Exception as e:
         logging.error(f"Error during methodology composition: {str(e)}")
         raise
+
 
 if __name__ == "__main__":
     asyncio.run(methodology_composing())

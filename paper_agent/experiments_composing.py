@@ -4,61 +4,65 @@ import asyncio
 import logging
 from tqdm import tqdm
 import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from benchmark_collection.utils.openai_utils import GPTClient
+from paper_agent.gpt_client import GPTClient
 from paper_agent.section_composer import SectionComposer, setup_logging
 
+
 class ExperimentsComposer(SectionComposer):
-    def __init__(self, research_field: str, structure_iterations: int = 3, gpt_model='gpt-4o-mini-2024-07-18'):
+    def __init__(
+        self,
+        research_field: str,
+        structure_iterations: int = 3,
+        gpt_model="gpt-4o-mini-2024-07-18",
+    ):
         super().__init__(research_field, "experiments", structure_iterations)
 
     def read_project_structure(self, project_dir):
         """Read entire project directory structure and code files"""
         dir_tree = []
         code_contents = []
-        
+
         for root, dirs, files in os.walk(project_dir):
             # Skip system directories
-            dirs[:] = [d for d in dirs if not d.startswith(('__', '.', 'cache'))]
-            
+            dirs[:] = [d for d in dirs if not d.startswith(("__", ".", "cache"))]
+
             rel_path = os.path.relpath(root, project_dir)
-            if rel_path == '.':
-                rel_path = ''
-                
+            if rel_path == ".":
+                rel_path = ""
+
             current_dir = []
             for f in files:
-                if f.endswith('.py'):
+                if f.endswith(".py"):
                     try:
                         filepath = os.path.join(root, f)
-                        with open(filepath, 'r', encoding='utf-8') as file:
+                        with open(filepath, "r", encoding="utf-8") as file:
                             content = file.read()
-                            code_contents.append({
-                                'path': os.path.join(rel_path, f),
-                                'content': content
-                            })
+                            code_contents.append(
+                                {"path": os.path.join(rel_path, f), "content": content}
+                            )
                     except Exception as e:
                         logging.error(f"Error reading file {f}: {str(e)}")
                 current_dir.append(f)
-            
+
             if current_dir or dirs:
-                dir_tree.append({
-                    'path': rel_path,
-                    'files': current_dir,
-                    'dirs': dirs
-                })
-                
+                dir_tree.append({"path": rel_path, "files": current_dir, "dirs": dirs})
+
         return dir_tree, code_contents
 
     def generate_project_summary(self, dir_tree, code_contents):
         """Generate a structured summary of project files and contents"""
         summary = {
-            'directory_structure': dir_tree,
-            'code_files': [{'path': code['path']} for code in code_contents]#,
+            "directory_structure": dir_tree,
+            "code_files": [{"path": code["path"]} for code in code_contents],  # ,
             # 'experiment_scripts': [{'path': script['path']} for script in scripts]
         }
         return json.dumps(summary, indent=2)
 
-    async def generate_or_revise_structure(self, content: str, current_structure: str, iteration: int) -> str:
+    async def generate_or_revise_structure(
+        self, content: str, current_structure: str, iteration: int
+    ) -> str:
         prompt = f"""Based on the given content, generate or revise the experiments section structure, using latex format.
 Current iteration: {iteration}/{self.structure_iterations}
 
@@ -115,9 +119,11 @@ Output the LaTeX structure with detailed comments as specified above. Do not inc
 
         return await self.gpt_client.chat(prompt=prompt)
 
-    async def find_and_fill_results(self, content_collection: str, structure: str, iteration: int) -> str:
+    async def find_and_fill_results(
+        self, content_collection: str, structure: str, iteration: int
+    ) -> str:
         """Find specific experimental results and fill them into the structure in one step."""
-        
+
         prompt = f"""Fill in specific numerical experimental results into the LaTeX structure for experiments section.
 
 Current structure with comments:
@@ -159,12 +165,14 @@ Output the complete LaTeX structure with actual results filled in, keeping all o
 
         # Get updated structure with results filled in
         updated_structure = await self.gpt_client.chat(prompt=prompt)
-        
+
         return updated_structure
 
-    async def detailize_subsection(self, structure: str, current_text: str, content: str, subsection: str) -> str:
+    async def detailize_subsection(
+        self, structure: str, current_text: str, content: str, subsection: str
+    ) -> str:
         writing_template = self.get_random_template()
-        
+
         prompt = f"""Write or revise the following subsection of the experiments section:
 \subsection{{{subsection}}}
 
@@ -266,95 +274,111 @@ Output the revised experiments section incorporating all these improvements. Rep
 
         return await self.gpt_client.chat(prompt=prompt)
 
-    async def compose_section(self, agent_dir: str, proj_dir: str, benchmark_path: str, target_paper: str) -> str:
-        checkpoint_dir = self.get_checkpoint_path(target_paper)
-        os.makedirs(checkpoint_dir, exist_ok=True)
+    async def compose_section(
+        self, agent_dir: str, proj_dir: str, target_paper: str
+    ) -> str:
+        # Dynamically get agent files from agent_dir
+        agent_files = []
+        if os.path.exists(agent_dir):
+            agent_files = [f for f in os.listdir(agent_dir) if f.endswith(".json")]
+            agent_files.sort()
+
+        if not agent_files:
+            logging.warning(f"No agent files found in {agent_dir}")
+            return ""
+
+        logging.info(f"Found {len(agent_files)} agent files: {agent_files}")
 
         # Get project directory
-        workplace_dir = os.path.join(proj_dir, 'workplace/project/')
-        # model_dir = os.path.join(workplace_dir, 'model/')
-        
+        workplace_dir = (
+            os.path.join(proj_dir, "workplace/project/") if proj_dir else None
+        )
+
         # Read project structure and contents
-        dir_tree, code_contents = self.read_project_structure(workplace_dir)
+        dir_tree = ""
+        code_contents = ""
+        if workplace_dir and os.path.exists(workplace_dir):
+            dir_tree, code_contents = self.read_project_structure(workplace_dir)
 
-        project_summary = '***Directory Tree***:\n' + str(dir_tree) + '\n\n' + '***Code Contents***:\n' + str(code_contents)
+        project_summary = (
+            "***Directory Tree***:\n"
+            + str(dir_tree)
+            + "\n\n"
+            + "***Code Contents***:\n"
+            + str(code_contents)
+        )
         self.write_temp_log(project_summary, "project_summary")
-
-        # Focus on experiment-related agent files
-        agent_files = [
-            'experiment_analysis_agent_iter_refine_1.json',
-            'machine_learning_agent_iter_refine_1.json',
-            'experiment_analysis_agent_iter_refine_2.json',
-            'machine_learning_agent_iter_refine_2.json',
-        ]
 
         # Step 1: Iterative structure generation
         structure = ""
-        structure_checkpoint = self.load_checkpoint(target_paper, "structure")
-        
-        if structure_checkpoint:
-            structure = structure_checkpoint["final_structure"]
-            logging.info("Loaded structure from checkpoint")
-            exit()
-        else:
-            for iteration in range(self.structure_iterations + 1):
-                if iteration < self.structure_iterations:
-                    temp_func = self.generate_or_revise_structure
-                else:
-                    temp_func = self.find_and_fill_results
-                logging.info(f"Structure iteration {iteration + 1}/{self.structure_iterations + 1}")
-                
-                for idx, agent_file in enumerate(tqdm(agent_files, desc="Processing agent files")):
-                    with open(os.path.join(agent_dir, agent_file), 'r') as f:
-                        content = json.load(f)
-                    structure = await temp_func(json.dumps(content, indent=2), structure, iteration + 1)
-                
+
+        for iteration in range(self.structure_iterations + 1):
+            if iteration < self.structure_iterations:
+                temp_func = self.generate_or_revise_structure
+            else:
+                temp_func = self.find_and_fill_results
+            logging.info(
+                f"Structure iteration {iteration + 1}/{self.structure_iterations + 1}"
+            )
+
+            for idx, agent_file in enumerate(
+                tqdm(agent_files, desc="Processing agent files")
+            ):
+                with open(os.path.join(agent_dir, agent_file), "r") as f:
+                    content = json.load(f)
                 structure = await temp_func(
-                    project_summary, structure, iteration + 1)
-                
-                self.write_temp_log(structure, f"iteration_{iteration+1}_final")
-            
-            self.save_checkpoint(target_paper, "structure", {
-                "final_structure": structure
-            })
+                    json.dumps(content, indent=2), structure, iteration + 1
+                )
+
+            structure = await temp_func(project_summary, structure, iteration + 1)
+
+            self.write_temp_log(structure, f"iteration_{iteration + 1}_final")
 
         # Step 2: Detailize subsections
-        subsections = [line.split('{')[1].split('}')[0] 
-                    for line in structure.split('\n') 
-                    if line.strip().startswith('\\subsection')]
-        
+        subsections = [
+            line.split("{")[1].split("}")[0]
+            for line in structure.split("\n")
+            if line.strip().startswith("\\subsection")
+        ]
+
         subsection_contents = {}
         subsection_checkpoint = self.load_checkpoint(target_paper, "subsections")
-        
+
         if subsection_checkpoint:
             subsection_contents = subsection_checkpoint
             logging.info("Loaded subsection contents from checkpoint")
         else:
-            for subsection_id, subsection in enumerate(tqdm(subsections, desc="Detailizing subsections")):
-                experiments_part = ''
-                
+            for subsection_id, subsection in enumerate(
+                tqdm(subsections, desc="Detailizing subsections")
+            ):
+                experiments_part = ""
+
                 # First process agent contents
                 for i, agent_file in enumerate(agent_files):
-                    with open(os.path.join(agent_dir, agent_file), 'r') as f:
+                    with open(os.path.join(agent_dir, agent_file), "r") as f:
                         content = json.load(f)
                     experiments_part = await self.detailize_subsection(
-                        structure, experiments_part, json.dumps(content, indent=2), subsection)
-                    
-                    self.write_temp_log(
+                        structure,
                         experiments_part,
-                        f"subsection_{subsection_id}_agent_{i}"
+                        json.dumps(content, indent=2),
+                        subsection,
                     )
-                experiments_part = await self.detailize_subsection(structure, experiments_part, project_summary, subsection)
+
+                    self.write_temp_log(
+                        experiments_part, f"subsection_{subsection_id}_agent_{i}"
+                    )
+                experiments_part = await self.detailize_subsection(
+                    structure, experiments_part, project_summary, subsection
+                )
                 subsection_contents[subsection] = experiments_part
-                
+
             self.save_checkpoint(target_paper, "subsections", subsection_contents)
 
         # Step 3: Fuse all subsections
         self.write_temp_log(
-            json.dumps(subsection_contents, indent=2),
-            "pre_fusion_subsections"
+            json.dumps(subsection_contents, indent=2), "pre_fusion_subsections"
         )
-        
+
         fused_experiments = await self.fuse_subsections(structure, subsection_contents)
         self.write_temp_log(fused_experiments, "post_fusion_experiments")
 
@@ -366,37 +390,43 @@ Output the revised experiments section incorporating all these improvements. Rep
         output_dir = f"{self.research_field}/target_sections/{self.normalize_title(target_paper)}"
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, "experiments.tex")
-        
-        with open(output_path, 'w', encoding='utf-8') as f:
+
+        with open(output_path, "w", encoding="utf-8") as f:
             f.write(final_experiments)
         logging.info(f"Saved final experiments to {output_path}")
 
         return final_experiments
 
-async def experiments_composing(research_field: str, instance_id: str):
+
+async def experiments_composing(
+    research_field: str,
+    instance_id: str,
+    agent_dir: str = None,
+    proj_dir: str = None,
+):
     setup_logging(research_field)
-    
-    composer = ExperimentsComposer(research_field=research_field, structure_iterations=1)#, gpt_model='o1-mini-2024-09-12')
-    
-    # proj_dir = f'/data2/tjb_share/{research_field}/{instance_id}/'
-    proj_dir = f'./paper_agent/{research_field}/{instance_id}/'
-    # target_paper = 'Heterogeneous Graph Contrastive Learning for Recommendation'
-    cache_dirs = [d for d in os.listdir(proj_dir) if d.startswith('cache_')]
-    if not cache_dirs:
-        raise ValueError("No cache directory found")
-    agent_dir = os.path.join(proj_dir, cache_dirs[-1], 'agents')
-    
-    # model_dir = os.path.join(proj_dir, 'workplace/project/model/')
-    # benchmark_path = f'/data2/tjb/Inno-agent/benchmark/final/{research_field}/{instance_id}.json'
-    benchmark_path = f'./benchmark/final/{research_field}/{instance_id}.json'
-    
+
+    composer = ExperimentsComposer(
+        research_field=research_field, structure_iterations=1
+    )
+
+    if proj_dir is None:
+        proj_dir = f"./paper_agent/{research_field}/{instance_id}/"
+
+    # Use provided paths or fall back to default
+    if agent_dir is None:
+        cache_dirs = [d for d in os.listdir(proj_dir) if d.startswith("cache_")]
+        if not cache_dirs:
+            raise ValueError("No cache directory found")
+        agent_dir = os.path.join(proj_dir, cache_dirs[-1], "agents")
+
     try:
-        experiments = await composer.compose_section(
-            agent_dir, proj_dir, benchmark_path, instance_id)
+        experiments = await composer.compose_section(agent_dir, proj_dir, instance_id)
         logging.info("Experiments composition completed")
     except Exception as e:
         logging.error(f"Error during experiments composition: {str(e)}")
         raise
+
 
 if __name__ == "__main__":
     asyncio.run(experiments_composing())

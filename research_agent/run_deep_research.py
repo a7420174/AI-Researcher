@@ -80,7 +80,6 @@ Please provide:
 - Key findings from biomedical databases
 - Key findings from academic literature
 - Key findings from web searches
-- Companies, products, development stages
 - Clinical trial information
 - Sources and references
 
@@ -116,9 +115,12 @@ def main(
         reference: Optional reference papers (not used in Deep Research mode)
         use_docker: Whether to use Docker (not used - Deep Research is Docker-independent)
         verify: Whether to run verification and fix iteration (default: True)
+
+    Returns:
+        dict: Contains 'result' (research findings) and project paths
     """
     if not topic:
-        return "Error: Topic is required for deep research"
+        return {"error": "Error: Topic is required for deep research", "result": None}
 
     async def run_research():
         flow = DeepResearchFlow(
@@ -129,7 +131,17 @@ def main(
         result = await flow.research(topic=topic, verify=verify)
         return result
 
-    return asyncio.run(run_research())
+    research_result = asyncio.run(run_research())
+
+    # Return research result and project info
+    # Note: Deep Research doesn't create a full project, but we return paths for consistency
+    return {
+        "result": research_result,
+        "instance_id": "deep_research",
+        "local_root": "/tmp/deep_research",
+        "agent_dir": None,
+        "model_dir": None,
+    }
 
 
 if __name__ == "__main__":

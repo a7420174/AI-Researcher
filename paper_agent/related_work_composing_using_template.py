@@ -4,15 +4,20 @@ import asyncio
 import logging
 from tqdm import tqdm
 import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from benchmark_collection.utils.openai_utils import GPTClient
+
+from paper_agent.gpt_client import GPTClient
 from paper_agent.section_composer import SectionComposer, setup_logging
+
 
 class RelatedWorkComposer(SectionComposer):
     def __init__(self, research_field: str, structure_iterations: int = 3):
         super().__init__(research_field, "related_work", structure_iterations)
 
-    async def generate_or_revise_structure(self, content: str, current_structure: str, iteration: int) -> str:
+    async def generate_or_revise_structure(
+        self, content: str, current_structure: str, iteration: int
+    ) -> str:
         prompt = f"""Based on the given content, generate or revise the related work structure, using latex format.
 Current iteration: {iteration}/{self.structure_iterations}
 
@@ -70,9 +75,11 @@ Output only the LaTeX structure with comments as specified above."""
 
         return await self.gpt_client.chat(prompt=prompt)
 
-    async def detailize_subsection(self, structure: str, current_text: str, content: str, subsection: str) -> str:
+    async def detailize_subsection(
+        self, structure: str, current_text: str, content: str, subsection: str
+    ) -> str:
         writing_template = self.get_random_template()
-        
+
         prompt = f"""Write or revise the following subsection of the related work:
 \subsection{{{subsection}}}
 
@@ -150,110 +157,121 @@ Output the revised related work section incorporating all these improvements. Re
         """Read all related papers from the papers directory"""
         papers_content = []
         for filename in os.listdir(papers_dir):
-            if filename.endswith('.txt') or filename.endswith('.json'):
+            if filename.endswith(".txt") or filename.endswith(".json"):
                 try:
-                    with open(os.path.join(papers_dir, filename), 'r', encoding='utf-8') as f:
+                    with open(
+                        os.path.join(papers_dir, filename), "r", encoding="utf-8"
+                    ) as f:
                         content = f.read()
-                        papers_content.append({
-                            'filename': filename,
-                            'content': content
-                        })
+                        papers_content.append(
+                            {"filename": filename, "content": content}
+                        )
                 except Exception as e:
                     logging.error(f"Error reading paper file {filename}: {str(e)}")
         return papers_content
-    
-    async def compose_section(self, agent_dir: str, papers_dir: str, benchmark_path: str, target_paper: str) -> str:
-        checkpoint_dir = self.get_checkpoint_path(target_paper)
-        os.makedirs(checkpoint_dir, exist_ok=True)
 
-        # Focus on literature review related agent files
-        agent_files = [
-            'prepare_agent.json',
-            'survey_agent.json',
+    async def compose_section(
+        self, agent_dir: str, papers_dir: str, target_paper: str
+    ) -> str:
+        # Dynamically get agent files from agent_dir
+        agent_files = []
+        if os.path.exists(agent_dir):
+            agent_files = [f for f in os.listdir(agent_dir) if f.endswith(".json")]
+            agent_files.sort()
 
-            # 'coding_plan_agent.json',
-            # 'machine_learning_agent.json',
-            # 'judge_agent.json',
-            # 'machine_learning_agent_iter_submit.json',
-            # 'experiment_analysis_agent_iter_refine_1.json',
-            # 'machine_learning_agent_iter_refine_1.json',
-        ]
-        
+        if not agent_files:
+            logging.warning(f"No agent files found in {agent_dir}")
+            return ""
+
+        logging.info(f"Found {len(agent_files)} agent files: {agent_files}")
+
         # Read related papers
-        related_papers = self.read_related_papers(papers_dir)
-        logging.info(f"Found {len(related_papers)} related papers in {papers_dir}")
+        related_papers = []
+        if papers_dir and os.path.exists(papers_dir):
+            related_papers = self.read_related_papers(papers_dir)
+            logging.info(f"Found {len(related_papers)} related papers in {papers_dir}")
+        else:
+            logging.warning(f"Papers directory not found: {papers_dir}")
 
         # Step 1: Iterative structure generation
         structure = ""
-        structure_checkpoint = self.load_checkpoint(target_paper, "structure")
-        
-        if structure_checkpoint:
-            structure = structure_checkpoint["final_structure"]
-            logging.info("Loaded structure from checkpoint")
-        else:
-            for iteration in range(self.structure_iterations):
-                logging.info(f"Structure iteration {iteration + 1}/{self.structure_iterations}")
-                
-                # Process agent files for literature information
-                for idx, agent_file in enumerate(tqdm(agent_files, desc="Processing agent files")):
-                    with open(os.path.join(agent_dir, agent_file), 'r') as f:
-                        content = json.load(f)
-                    structure = await self.generate_or_revise_structure(
-                        json.dumps(content, indent=2), structure, iteration + 1)
-                
-                self.write_temp_log(structure, f"iteration_{iteration+1}_final")
-            
-            self.save_checkpoint(target_paper, "structure", {
-                "final_structure": structure
-            })
+
+        for iteration in range(self.structure_iterations):
+            logging.info(
+                f"Structure iteration {iteration + 1}/{self.structure_iterations}"
+            )
+
+            # Process agent files for literature information
+            for idx, agent_file in enumerate(
+                tqdm(agent_files, desc="Processing agent files")
+            ):
+                with open(os.path.join(agent_dir, agent_file), "r") as f:
+                    content = json.load(f)
+                structure = await self.generate_or_revise_structure(
+                    json.dumps(content, indent=2), structure, iteration + 1
+                )
+
+            self.write_temp_log(structure, f"iteration_{iteration + 1}_final")
 
         # Step 2: Detailize subsections
-        subsections = [line.split('{')[1].split('}')[0] 
-                    for line in structure.split('\n') 
-                    if line.strip().startswith('\\subsection')]
-        
+        subsections = [
+            line.split("{")[1].split("}")[0]
+            for line in structure.split("\n")
+            if line.strip().startswith("\\subsection")
+        ]
+
         subsection_contents = {}
         subsection_checkpoint = self.load_checkpoint(target_paper, "subsections")
-        
+
         if subsection_checkpoint:
             subsection_contents = subsection_checkpoint
             logging.info("Loaded subsection contents from checkpoint")
         else:
-            for subsection_id, subsection in enumerate(tqdm(subsections, desc="Detailizing subsections")):
-                related_work_part = ''
-                
+            for subsection_id, subsection in enumerate(
+                tqdm(subsections, desc="Detailizing subsections")
+            ):
+                related_work_part = ""
+
                 # First process agent contents
                 for i, agent_file in enumerate(agent_files):
-                    with open(os.path.join(agent_dir, agent_file), 'r') as f:
+                    with open(os.path.join(agent_dir, agent_file), "r") as f:
                         content = json.load(f)
                     related_work_part = await self.detailize_subsection(
-                        structure, related_work_part, json.dumps(content, indent=2), subsection)
-                    
-                    self.write_temp_log(
+                        structure,
                         related_work_part,
-                        f"subsection_{subsection_id}_agent_{i}"
+                        json.dumps(content, indent=2),
+                        subsection,
                     )
-                
-                # Then process related papers
-                for i, paper in enumerate(tqdm(related_papers, desc=f"Processing related papers for subsection {subsection}")):
-                    related_work_part = await self.detailize_subsection(
-                        structure, related_work_part, paper['content'], subsection)
-                    
-                    self.write_temp_log(
-                        related_work_part,
-                        f"subsection_{subsection_id}_paper_{i}"
-                    )
-                    
-                    subsection_contents[subsection] = related_work_part
-                    self.save_checkpoint(target_paper, "subsections", subsection_contents)
 
+                    self.write_temp_log(
+                        related_work_part, f"subsection_{subsection_id}_agent_{i}"
+                    )
+
+                # Then process related papers
+                for i, paper in enumerate(
+                    tqdm(
+                        related_papers,
+                        desc=f"Processing related papers for subsection {subsection}",
+                    )
+                ):
+                    related_work_part = await self.detailize_subsection(
+                        structure, related_work_part, paper["content"], subsection
+                    )
+
+                    self.write_temp_log(
+                        related_work_part, f"subsection_{subsection_id}_paper_{i}"
+                    )
+
+                    subsection_contents[subsection] = related_work_part
+                    self.save_checkpoint(
+                        target_paper, "subsections", subsection_contents
+                    )
 
         # Step 3: Fuse all subsections
         self.write_temp_log(
-            json.dumps(subsection_contents, indent=2),
-            "pre_fusion_subsections"
+            json.dumps(subsection_contents, indent=2), "pre_fusion_subsections"
         )
-        
+
         fused_related_work = await self.fuse_subsections(structure, subsection_contents)
         self.write_temp_log(fused_related_work, "post_fusion_related_work")
 
@@ -265,38 +283,47 @@ Output the revised related work section incorporating all these improvements. Re
         output_dir = f"{self.research_field}/target_sections/{self.normalize_title(target_paper)}"
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, "related_work.tex")
-        
-        with open(output_path, 'w', encoding='utf-8') as f:
+
+        with open(output_path, "w", encoding="utf-8") as f:
             f.write(final_related_work)
         logging.info(f"Saved final related work to {output_path}")
 
         return final_related_work
 
-async def related_work_composing(research_field: str, instance_id: str):
+
+async def related_work_composing(
+    research_field: str,
+    instance_id: str,
+    agent_dir: str = None,
+    papers_dir: str = None,
+):
     setup_logging(research_field)
-    
-    composer = RelatedWorkComposer(research_field=research_field, structure_iterations=1)
-    
-    # proj_dir = f'/data2/tjb_share/{research_field}/{instance_id}/'
-    proj_dir = f'./paper_agent/{research_field}/{instance_id}/'
-    # target_paper = "Knowledge Graph Self-Supervised Rationalization for Recommendation"
-    # target_paper = 'Heterogeneous Graph Contrastive Learning for Recommendation'
-    cache_dirs = [d for d in os.listdir(proj_dir) if d.startswith('cache_')]
-    if not cache_dirs:
-        raise ValueError("No cache directory found")
-    agent_dir = os.path.join(proj_dir, cache_dirs[-1], 'agents')
-    
-    # benchmark_path = f'/data2/tjb/Inno-agent/benchmark/final/{research_field}/{instance_id}.json'
-    benchmark_path = f'./benchmark/final/{research_field}/{instance_id}.json'
-    papers_dir = os.path.join(proj_dir, 'workplace', 'papers')
-    
+
+    composer = RelatedWorkComposer(
+        research_field=research_field, structure_iterations=1
+    )
+
+    proj_dir = f"./paper_agent/{research_field}/{instance_id}/"
+
+    # Use provided paths or fall back to default
+    if agent_dir is None:
+        cache_dirs = [d for d in os.listdir(proj_dir) if d.startswith("cache_")]
+        if not cache_dirs:
+            raise ValueError("No cache directory found")
+        agent_dir = os.path.join(proj_dir, cache_dirs[-1], "agents")
+
+    if papers_dir is None:
+        papers_dir = os.path.join(proj_dir, "workplace", "papers")
+
     try:
         related_work = await composer.compose_section(
-            agent_dir, papers_dir, benchmark_path, instance_id)
+            agent_dir, papers_dir, instance_id
+        )
         logging.info("Related work composition completed")
     except Exception as e:
         logging.error(f"Error during related work composition: {str(e)}")
         raise
+
 
 if __name__ == "__main__":
     asyncio.run(related_work_composing())
