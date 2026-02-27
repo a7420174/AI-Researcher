@@ -39,7 +39,6 @@ EVAL_MODE = str_to_bool(os.getenv("EVAL_MODE", False))
 BASE_IMAGES = os.getenv("BASE_IMAGES", "tjbtech1/paperapp:latest")
 
 COMPLETION_MODEL = os.getenv("COMPLETION_MODEL", "gpt-4o-2024-08-06")
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 CHEEP_MODEL = os.getenv("CHEEP_MODEL", "gpt-4o-mini-2024-07-18")
 
 GPUS = os.getenv("GPUS", "")
