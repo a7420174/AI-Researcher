@@ -29,7 +29,6 @@ OBJECTIVE:
 
 AVAILABLE TOOLS:
 1. BioMCP Tools (for biomedical research):
-   - `biomcp_think`: Sequential thinking tool - use BEFORE any search to plan your strategy
    - `biomcp_article_search`: Search PubMed/PubTator3 articles
    - `biomcp_article_get`: Get article details by PubMed ID
    - `biomcp_trial_search`: Search clinical trials from ClinicalTrials.gov
@@ -70,7 +69,6 @@ VERIFICATION CRITERIA:
 - Relevance: Does it directly address the research topic?
 
 IMPORTANT:
-- Always use `biomcp_think` first to plan your research strategy
 - Be thorough in searching multiple sources
 - Verify and fix issues iteratively
 - Provide comprehensive results with sources
@@ -79,7 +77,6 @@ When finished, use `transfer_to_judge_agent` to transfer the results to the Judg
 """
 
     tool_names = [
-        "biomcp_think",
         "biomcp_article_search",
         "biomcp_article_get",
         "biomcp_trial_search",

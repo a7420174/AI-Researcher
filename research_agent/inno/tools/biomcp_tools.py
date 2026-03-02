@@ -1,56 +1,7 @@
 import subprocess
 import json
-import asyncio
 from typing import Optional, List
 from research_agent.inno.registry import register_tool
-
-
-@register_tool("biomcp_think")
-def biomcp_think(
-    thought: str,
-    thoughtNumber: int = 1,
-    totalThoughts: int = 1,
-    nextThoughtNeeded: bool = False,
-    isRevision: bool = False,
-    revisesThought: Optional[int] = None,
-) -> str:
-    """
-    Sequential thinking tool for complex reasoning about biomedical queries.
-
-    Use this BEFORE searching to plan your search strategy:
-    - Break down the query into components
-    - Identify what databases/entities to search
-    - Determine search terms and filters
-
-    Args:
-        thought: Your current thinking step - be detailed and thorough
-        thoughtNumber: Current thought number (start at 1)
-        totalThoughts: Best estimate of total thoughts needed
-        nextThoughtNeeded: True if more thinking needed, False when done
-        isRevision: True when correcting/improving a previous thought
-        revisesThought: The thought number being revised (if isRevision=True)
-    """
-    from biomcp.thinking.sequential import _sequential_thinking
-
-    try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        result = loop.run_until_complete(
-            _sequential_thinking(
-                thought=thought,
-                nextThoughtNeeded=nextThoughtNeeded,
-                thoughtNumber=thoughtNumber,
-                totalThoughts=totalThoughts,
-                isRevision=isRevision,
-                revisesThought=revisesThought,
-                branchFromThought=None,
-                needsMoreThoughts=None,
-            )
-        )
-        loop.close()
-        return result
-    except Exception as e:
-        return f"Error in biomcp_think: {str(e)}"
 
 
 def _run_biomcp_command(args: List[str]) -> str:

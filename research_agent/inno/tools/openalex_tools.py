@@ -206,6 +206,8 @@ def openalex_search(
         검색 결과 (items, meta 포함)
     """
     per_page = max(1, min(int(per_page), 200))
+    max_items = int(max_items) if max_items else 50
+    page = int(page) if page else 1
 
     params: Dict[str, Any] = {"per-page": per_page}
 
@@ -344,6 +346,8 @@ def openalex_search_papers(
         포맷된 검색 결과 문자열
     """
     api_key = api_key or _get_openalex_api_key()
+
+    max_results = int(max_results) if max_results else 20
 
     filters_parts = []
     if year_from:
