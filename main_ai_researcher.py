@@ -348,6 +348,7 @@ def main_ai_researcher(input, reference, mode, use_docker=None):
                 os.chdir(sub_dir)
 
                 from research_agent import run_deep_research
+                from constant import COMPLETION_MODEL
 
                 result_info = run_deep_research.main(topic=input, reference=reference)
 
@@ -355,15 +356,31 @@ def main_ai_researcher(input, reference, mode, use_docker=None):
                 if isinstance(result_info, dict):
                     result = result_info.get("result", "")
 
-                    # Run paper writing based on deep research results
-                    from paper_agent import writing
+                    # Create project structure for paper writing
+                    import json
 
                     research_field = "general"
                     instance_id = "deep_research"
 
-                    # For deep research, we save the result to a file that can be used by writing module
-                    import json
+                    # Create local_root similar to run_infer_plan
+                    local_root = os.path.join(
+                        os.getcwd(),
+                        "workplace_paper",
+                        f"task_{instance_id}"
+                        + "_"
+                        + COMPLETION_MODEL.replace("/", "__").replace(":", "_"),
+                    )
+                    os.makedirs(local_root, exist_ok=True)
 
+                    # Create agent_dir and model_dir paths
+                    workplace_name = "workplace"
+                    agent_dir = os.path.join(local_root, workplace_name)
+                    model_dir = os.path.join(local_root, workplace_name, "project")
+
+                    os.makedirs(agent_dir, exist_ok=True)
+                    os.makedirs(model_dir, exist_ok=True)
+
+                    # Save deep research result
                     result_dir = f"./paper_agent/{research_field}/{instance_id}"
                     os.makedirs(result_dir, exist_ok=True)
                     with open(
@@ -371,8 +388,22 @@ def main_ai_researcher(input, reference, mode, use_docker=None):
                     ) as f:
                         json.dump({"result": result, "topic": input}, f)
 
-                    # Run paper writing
-                    asyncio.run(writing.writing(research_field, instance_id))
+                    # Save result to agent_dir for paper writing
+                    with open(os.path.join(agent_dir, "research_result.md"), "w") as f:
+                        f.write(f"# Research Topic: {input}\n\n")
+                        f.write(result)
+
+                    # Run paper writing with proper paths
+                    from paper_agent import writing
+
+                    asyncio.run(
+                        writing.writing(
+                            research_field,
+                            instance_id,
+                            agent_dir=agent_dir,
+                            model_dir=model_dir,
+                        )
+                    )
 
                     return f"Deep research and paper writing completed successfully. Result saved to {result_dir}"
                 return result_info
