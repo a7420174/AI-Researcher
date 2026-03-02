@@ -71,7 +71,7 @@ SAFE_TPM_RATIO = 0.8
 DEFAULT_TPM = int(DEFAULT_TPM * SAFE_TPM_RATIO)
 DEFAULT_RPD = int(os.getenv("RPD_LIMIT", "250"))
 
-litellm.set_verbose = True
+# litellm.set_verbose = True
 litellm.num_retries = 3
 
 
