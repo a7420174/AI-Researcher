@@ -1,5 +1,6 @@
 import subprocess
 import json
+import os
 from typing import Optional, List
 from research_agent.inno.registry import register_tool
 
@@ -7,8 +8,14 @@ from research_agent.inno.registry import register_tool
 def _run_biomcp_command(args: List[str]) -> str:
     """Run biomcp CLI command and return output."""
     cmd = ["biomcp"] + args
+
+    # Pass environment variables including API keys
+    env = os.environ.copy()
+
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=60, env=env
+        )
         if result.returncode != 0:
             return f"Error: {result.stderr}"
         return result.stdout

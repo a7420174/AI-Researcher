@@ -376,3 +376,30 @@ def main_ai_researcher(input, reference, mode, use_docker=None):
 
                     return f"Deep research and paper writing completed successfully. Result saved to {result_dir}"
                 return result_info
+
+
+if __name__ == "__main__":
+    import logging
+
+    logging.basicConfig(level=logging.INFO)
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--input", type=str, required=True, help="Research topic or input"
+    )
+    parser.add_argument("--reference", type=str, default="", help="Reference papers")
+    parser.add_argument(
+        "--mode",
+        type=str,
+        default="Detailed Idea Description",
+        choices=[
+            "Detailed Idea Description",
+            "Reference-Based Ideation",
+            "Deep Research",
+        ],
+        help="Research mode",
+    )
+    args = parser.parse_args()
+
+    result = main_ai_researcher(args.input, args.reference, args.mode)
+    print(f"Result: {result}")
