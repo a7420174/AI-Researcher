@@ -29,15 +29,29 @@ OBJECTIVE:
 
 AVAILABLE TOOLS:
 1. BioMCP Tools (for biomedical research):
-   - `biomcp_article_search`: Search PubMed/PubTator3 articles
+   - `biomcp_article_search`: Search biomedical articles
    - `biomcp_article_get`: Get article details by PubMed ID
-   - `biomcp_trial_search`: Search clinical trials from ClinicalTrials.gov
+   - `biomcp_trial_search`: Search clinical trials
    - `biomcp_trial_get`: Get trial details by NCT ID
-   - `biomcp_gene_search`: Search gene information from MyGene.info
+   - `biomcp_gene_search`: Search gene information
    - `biomcp_gene_get`: Get gene details
-   - `biomcp_drug_search`: Search drug information from MyChem.info
+   - `biomcp_drug_search`: Search drug information
    - `biomcp_drug_get`: Get drug details
    - `biomcp_disease_search`: Search disease information
+   - `biomcp_disease_get`: Get disease details
+   - `biomcp_variant_search`: Search genetic variants
+   - `biomcp_variant_get`: Get variant details
+   - `biomcp_pathway_search`: Search pathways
+   - `biomcp_pathway_get`: Get pathway details
+   - `biomcp_protein_search`: Search proteins
+   - `biomcp_protein_get`: Get protein details
+   - `biomcp_adverse_event_search`: Search adverse events
+   - `biomcp_adverse_event_get`: Get adverse event details
+   - `biomcp_pgx_search`: Search pharmacogenomics
+   - `biomcp_pgx_get`: Get pharmacogenomics details
+   - `biomcp_gwas_search`: Search GWAS
+   - `biomcp_phenotype_search`: Search phenotypes
+   - `biomcp_gene_enrich`: Gene-set enrichment analysis
 
 2. OpenAlex Search (for academic literature):
    - `openalex_search_papers`: Search academic papers (RECOMMENDED - no rate limits)
@@ -87,6 +101,18 @@ When finished, use `transfer_to_judge_agent` to transfer the results to the Judg
         "biomcp_drug_get",
         "biomcp_disease_search",
         "biomcp_disease_get",
+        "biomcp_variant_search",
+        "biomcp_variant_get",
+        "biomcp_pathway_search",
+        "biomcp_pathway_get",
+        "biomcp_protein_search",
+        "biomcp_protein_get",
+        "biomcp_adverse_event_search",
+        "biomcp_adverse_event_get",
+        "biomcp_pgx_search",
+        "biomcp_pgx_get",
+        "biomcp_gwas_search",
+        "biomcp_phenotype_search",
         "biomcp_gene_enrich",
         "openalex_search",
         "openalex_search_papers",

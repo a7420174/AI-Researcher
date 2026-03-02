@@ -42,22 +42,30 @@ AVAILABLE TOOLS:
    - `find_on_page_ctrl_f` / `find_next`: Search specific content
    - `question_answer_on_whole_page`: Ask specific questions about the paper
 
-3. BioMCP Tools (use for biomedical research - articles, trials, genes, drugs, diseases, variants):
-   - `biomcp_article_search`: Search PubMed/PubTator3 articles by gene, disease, drug, keyword
+3. BioMCP Tools (use for biomedical research):
+   - `biomcp_article_search`: Search biomedical articles
    - `biomcp_article_get`: Get article details by PubMed ID
-   - `biomcp_trial_search`: Search clinical trials from ClinicalTrials.gov
+   - `biomcp_trial_search`: Search clinical trials
    - `biomcp_trial_get`: Get trial details by NCT ID
-   - `biomcp_gene_search`: Search gene information from MyGene.info
+   - `biomcp_gene_search`: Search gene information
    - `biomcp_gene_get`: Get gene details
-   - `biomcp_drug_search`: Search drug information from MyChem.info
+   - `biomcp_drug_search`: Search drug information
    - `biomcp_drug_get`: Get drug details
    - `biomcp_disease_search`: Search disease information
    - `biomcp_disease_get`: Get disease details
-   - `biomcp_variant_search`: Search genetic variants from MyVariant.info
+   - `biomcp_variant_search`: Search genetic variants
    - `biomcp_variant_get`: Get variant details
-   - `biomcp_intervention_search`: Search interventions from NCI CTS API
-   - `biomcp_biomarker_search`: Search biomarkers in clinical trials
-   - `biomcp_gene_enrich`: Perform gene-set enrichment analysis
+   - `biomcp_pathway_search`: Search pathways
+   - `biomcp_pathway_get`: Get pathway details
+   - `biomcp_protein_search`: Search proteins
+   - `biomcp_protein_get`: Get protein details
+   - `biomcp_adverse_event_search`: Search adverse events
+   - `biomcp_adverse_event_get`: Get adverse event details
+   - `biomcp_pgx_search`: Search pharmacogenomics
+   - `biomcp_pgx_get`: Get pharmacogenomics details
+   - `biomcp_gwas_search`: Search GWAS
+   - `biomcp_phenotype_search`: Search phenotypes
+   - `biomcp_gene_enrich`: Gene-set enrichment analysis
 
 4. OpenAlex Search (PRIORITY for academic literature - no rate limits, better abstracts):
    - `openalex_search_papers`: Search academic papers from OpenAlex (RECOMMENDED for literature review)
@@ -111,8 +119,16 @@ Remember: Your analysis forms the theoretical foundation for the subsequent code
         "biomcp_disease_get",
         "biomcp_variant_search",
         "biomcp_variant_get",
-        "biomcp_intervention_search",
-        "biomcp_biomarker_search",
+        "biomcp_pathway_search",
+        "biomcp_pathway_get",
+        "biomcp_protein_search",
+        "biomcp_protein_get",
+        "biomcp_adverse_event_search",
+        "biomcp_adverse_event_get",
+        "biomcp_pgx_search",
+        "biomcp_pgx_get",
+        "biomcp_gwas_search",
+        "biomcp_phenotype_search",
         "biomcp_gene_enrich",
         "openalex_search",
         "openalex_search_papers",

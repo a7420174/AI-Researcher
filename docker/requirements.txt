@@ -17,4 +17,4 @@ tokenizers>=0.10.2
 ftfy
 regex
 pycocotools
-biomcp
+duckduckgo_search
