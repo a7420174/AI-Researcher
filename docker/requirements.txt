@@ -17,4 +17,3 @@ tokenizers>=0.10.2
 ftfy
 regex
 pycocotools
-duckduckgo_search

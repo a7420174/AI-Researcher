@@ -349,6 +349,20 @@ def openalex_search_papers(
 
     max_results = int(max_results) if max_results else 20
 
+    # Handle both string and int inputs for year parameters
+    def _to_int(val):
+        if val is None:
+            return None
+        if isinstance(val, int):
+            return val
+        try:
+            return int(val)
+        except (ValueError, TypeError):
+            return None
+
+    year_from = _to_int(year_from)
+    year_to = _to_int(year_to)
+
     filters_parts = []
     if year_from:
         filters_parts.append(f"publication_year:>={year_from}")
