@@ -187,13 +187,13 @@ Output the revised abstract section incorporating all these improvements. Reply 
 
         dst_dir = output_dir
         src_dir = "./paper_agent/final_paper"
-        for filename in os.listdir(src_dir):
-            src_path = os.path.join(src_dir, filename)
-            # dst_path = os.path.join(dst_dir, filename)
+        if os.path.exists(src_dir):
+            for filename in os.listdir(src_dir):
+                src_path = os.path.join(src_dir, filename)
 
-            # 只复制文件，不复制子文件夹
-            if os.path.isfile(src_path):
-                shutil.copy2(src_path, dst_dir)  # copy2 会保留元数据（时间戳等）
+                # 只复制文件，不复制子文件夹
+                if os.path.isfile(src_path):
+                    shutil.copy2(src_path, dst_dir)  # copy2 会保留元数据（时间戳等）
 
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(final_abstract)
