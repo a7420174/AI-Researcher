@@ -69,10 +69,19 @@ class DeepResearchFlow:
 
 Topic: {topic}
 
+IMPORTANT SEARCH INSTRUCTIONS:
+1. When searching for drug/trial/article databases, ALWAYS use the EXACT topic terms.
+   - For example, if the topic is "IL1RAP ADC", search for "IL1RAP ADC" specifically,
+     NOT just "ADC" or "IL1RAP" alone.
+   - Use compound search terms like "IL1RAP ADC", "IL1RAP antibody-drug conjugate"
+2. Search WITHOUT year limits to get the latest information (do NOT restrict to 2024)
+3. After completing research, you MUST call transfer_to_judge_agent automatically,
+   do NOT ask the user - just proceed with the transfer.
+
 Research Requirements:
-1. Search and analyze information from BioMCP (biomedical databases)
-2. Search academic papers from OpenAlex
-3. Search the web for additional information
+1. Search and analyze information from BioMCP (biomedical databases) - use EXACT topic terms
+2. Search academic papers from OpenAlex - use EXACT topic terms, no year limits
+3. Search the web for additional information - use EXACT topic terms
 4. Synthesize findings into a comprehensive summary
 
 Please provide:
@@ -83,7 +92,8 @@ Please provide:
 - Clinical trial information
 - Sources and references
 
-{"After providing the initial summary, verify and fix any issues found (up to 3 iterations)." if verify else ""}
+After providing the initial summary, verify and fix any issues found (up to 3 iterations).
+Then automatically call transfer_to_judge_agent with the final research summary.
 """
 
         try:
