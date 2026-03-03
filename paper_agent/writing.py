@@ -6,6 +6,7 @@ from paper_agent.conclusion_composing import conclusion_composing
 from paper_agent.abstract_composing import abstract_composing
 import asyncio
 import argparse
+import os
 from paper_agent.writing_fix import clean_tex_files_in_folder, process_tex_file
 from paper_agent.tex_writer import compile_latex_project
 
@@ -39,11 +40,19 @@ async def writing(
     bib_file_path = (
         f"{research_field}/target_sections/{instance_id}/iclr2025_conference.bib"
     )
-    process_tex_file(tex_file_path, bib_file_path)
+    if os.path.exists(tex_file_path):
+        process_tex_file(tex_file_path, bib_file_path)
+    else:
+        print(f"Warning: {tex_file_path} not found, skipping tex processing")
 
     project_directory = f"{research_field}/target_sections/{instance_id}"
     main_file = "iclr2025_conference.tex"
-    compile_latex_project(project_directory, main_file)
+    if os.path.exists(os.path.join(project_directory, main_file)):
+        compile_latex_project(project_directory, main_file)
+    else:
+        print(
+            f"Warning: {main_file} not found in {project_directory}, skipping latex compilation"
+        )
 
 
 if __name__ == "__main__":
