@@ -313,7 +313,11 @@ Output the revised methodology section incorporating all these improvements whil
         self.write_temp_log(final_methodology, "post_checklist_methodology")
 
         # Save final output
-        output_dir = f"{self.research_field}/target_sections/{self.normalize_title(target_paper)}"
+        target_folder = os.environ.get("PAPER_TARGET_FOLDER")
+        if target_folder:
+            output_dir = target_folder
+        else:
+            output_dir = f"{self.research_field}/target_sections/{self.normalize_title(target_paper)}"
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, "methodology.tex")
 
@@ -336,17 +340,31 @@ async def methodology_composing(
         research_field=research_field, structure_iterations=1
     )
 
-    proj_dir = f"./paper_agent/{research_field}/{instance_id}/"
-
-    # Use provided paths or fall back to default
+    # Use provided paths or fall back to a path based on research_field
     if agent_dir is None:
-        cache_dirs = [d for d in os.listdir(proj_dir) if d.startswith("cache_")]
-        if not cache_dirs:
-            raise ValueError("No cache directory found")
-        agent_dir = os.path.join(proj_dir, cache_dirs[-1], "agents")
+        # Try to find agent_dir from the default location
+        # Look in workplace_paper/{research_field}/{instance_id}/
+        import os
 
-    if model_dir is None:
-        model_dir = os.path.join(proj_dir, "workplace/project/model/")
+        default_base = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".."
+        )
+        proj_dir = os.path.join(
+            default_base, "workplace_paper", research_field, instance_id
+        )
+        if os.path.exists(proj_dir):
+            cache_dirs = [d for d in os.listdir(proj_dir) if d.startswith("cache_")]
+            if cache_dirs:
+                agent_dir = os.path.join(proj_dir, cache_dirs[-1], "agents")
+                model_dir = os.path.join(proj_dir, "workplace/project/model/")
+            else:
+                logging.warning(
+                    f"No cache directories found in {proj_dir}, agent_dir will be None"
+                )
+        else:
+            logging.warning(
+                f"Project directory {proj_dir} does not exist, agent_dir will be None"
+            )
 
     try:
         methodology = await composer.compose_section(agent_dir, model_dir, instance_id)

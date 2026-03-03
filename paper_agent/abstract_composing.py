@@ -181,12 +181,16 @@ Output the revised abstract section incorporating all these improvements. Reply 
         self.write_temp_log(final_abstract, "initial_abstract")
 
         # Save final output
-        output_dir = f"{self.research_field}/target_sections/{self.normalize_title(target_paper)}"
+        target_folder = os.environ.get("PAPER_TARGET_FOLDER")
+        if target_folder:
+            output_dir = target_folder
+        else:
+            output_dir = f"{self.research_field}/target_sections/{self.normalize_title(target_paper)}"
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, "abstract.tex")
 
         dst_dir = output_dir
-        src_dir = "./paper_agent/final_paper"
+        src_dir = "./paper_agent/writing_templates"
         if os.path.exists(src_dir):
             for filename in os.listdir(src_dir):
                 src_path = os.path.join(src_dir, filename)

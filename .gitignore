@@ -1,5 +1,5 @@
-research_agent/workplace_*/
-research_agent/workspace_*/
+workplace_*/
+workspace_*/
 research_agent/*.log
 research_agent/code_db/*
 research_agent/results/*
@@ -8,7 +8,6 @@ research_agent/paper_db/*
 __pycache__/
 tmp/*
 logs/*
-paper_agent/paper_logs/*
 uv.lock
 *.tar.gz
 

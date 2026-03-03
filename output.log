@@ -1,0 +1,44 @@
+nohup: ignoring input
+INFO:httpx:HTTP Request: GET https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json "HTTP/1.1 200 OK"
+************************** Log Path **************************
+[2026-03-03 18:45:19]
+Log file is saved to
+
+...
+INFO:sentence_transformers.SentenceTransformer:Load pretrained SentenceTransformer: all-MiniLM-L6-v2
+[bootstrap-registry] tools: check_agent, check_tool, click, code_rag, code_tree_rag, create_directory, create_file, ddg_search, download_arxiv_by_title, download_arxiv_source, download_arxiv_source_by_title, execute_command, extract_tex_content, find_next, find_on_page_ctrl_f, gen_code_tree_structure, get_api_doc, get_arxiv_paper_meta, get_current_branch, get_diff, get_page_markdown, history_back, history_forward, list_files, open_local_file, openalex_search, openalex_search_by_doi, openalex_search_papers, page_down, page_down_markdown, page_up, page_up_markdown, plan_dataset, plan_model, plan_testing, plan_training, push_changes, question_answer_on_whole_page, read_file, run_python, search_arxiv, search_github_code, search_github_repos, sleep, stage_files, submit_pull_request, terminal_page_down, terminal_page_to, terminal_page_up, tool_dummy, visit_url, visualizer, write_file
+[bootstrap-registry] agents: get_code_review_agent, get_coding_plan_agent, get_deep_survey_agent, get_exp_analyser_agent, get_idea_agent, get_judge_agent, get_ml_agent, get_prepare_agent, get_response_review_agent
+Traceback (most recent call last):
+  File "/home/a7420174/AI-Researcher/main_ai_researcher.py", line 453, in <module>
+    result = main_ai_researcher(
+             ^^^^^^^^^^^^^^^^^^^
+  File "/home/a7420174/AI-Researcher/main_ai_researcher.py", line 355, in main_ai_researcher
+    result_info = run_deep_research.main(topic=input, reference=reference)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/a7420174/AI-Researcher/research_agent/run_deep_research.py", line 157, in main
+    research_result = asyncio.run(run_research())
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/a7420174/.local/share/uv/python/cpython-3.11.14-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/home/a7420174/.local/share/uv/python/cpython-3.11.14-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/a7420174/.local/share/uv/python/cpython-3.11.14-linux-x86_64-gnu/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/a7420174/AI-Researcher/research_agent/run_deep_research.py", line 154, in run_research
+    result = await flow.research(topic=topic, verify=verify)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/a7420174/AI-Researcher/research_agent/run_deep_research.py", line 66, in research
+    agent = get_deep_survey_agent(model=self.model, file_env=file_env)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/a7420174/AI-Researcher/research_agent/inno/agents/deep_survey_agent.py", line 121, in get_deep_survey_agent
+    tools = get_tools(tool_names, env=file_env, env_wrapper=with_env_file)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/a7420174/AI-Researcher/research_agent/inno/registry.py", line 222, in get_tools
+    return registry.get_tools(names, env=env, env_wrapper=env_wrapper)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/a7420174/AI-Researcher/research_agent/inno/registry.py", line 186, in get_tools
+    raise KeyError(f"[registry] 등록되지 않은 tool: '{name}'. 사용 가능: [{available}]")
+KeyError: "[registry] 등록되지 않은 tool: 'biomcp_article_search'. 사용 가능: [check_agent, check_tool, click, code_rag, code_tree_rag, create_directory, create_file, ddg_search, download_arxiv_by_title, download_arxiv_source, download_arxiv_source_by_title, execute_command, extract_tex_content, find_next, find_on_page_ctrl_f, gen_code_tree_structure, get_api_doc, get_arxiv_paper_meta, get_current_branch, get_diff, get_page_markdown, history_back, history_forward, list_files, open_local_file, openalex_search, openalex_search_by_doi, openalex_search_papers, page_down, page_down_markdown, page_up, page_up_markdown, plan_dataset, plan_model, plan_testing, plan_training, push_changes, question_answer_on_whole_page, read_file, run_python, search_arxiv, search_github_code, search_github_repos, sleep, stage_files, submit_pull_request, terminal_page_down, terminal_page_to, terminal_page_up, tool_dummy, visit_url, visualizer, write_file]"

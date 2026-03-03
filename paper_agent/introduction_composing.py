@@ -204,7 +204,14 @@ Output the revised introduction section incorporating all these improvements. Re
         self.write_temp_log(final_introduction, "final_introduction")
 
         # Save final output
-        output_dir = f"{self.research_field}/target_sections/{self.normalize_title(target_paper)}"
+        # Check for environment variable first, then fall back to relative path
+        target_folder = os.environ.get("PAPER_TARGET_FOLDER")
+        if target_folder:
+            output_dir = os.path.join(target_folder)
+        else:
+            output_dir = f"{self.research_field}/target_sections/{self.normalize_title(target_paper)}"
+
+        print(f"[DEBUG intro] output_dir: {output_dir}", flush=True)
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, "introduction.tex")
 

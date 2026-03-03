@@ -587,8 +587,10 @@ def main(args, ideas, references, task_instructions=None):
     # Query 기반 모드: source_papers 사용
     instance_id = "query_based"
 
+    # Get project root (parent of research_agent)
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     local_root = os.path.join(
-        os.getcwd(),
+        project_root,
         "workplace_paper",
         f"task_{instance_id}"
         + "_"
@@ -650,7 +652,7 @@ def main(args, ideas, references, task_instructions=None):
 
     flow = InnoFlow(
         cache_path=os.path.join(
-            os.getcwd(),
+            project_root,
             "workplace_paper",
             "cache_"
             + instance_id

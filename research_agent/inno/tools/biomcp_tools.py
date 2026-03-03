@@ -1,13 +1,55 @@
 import subprocess
 import json
 import os
+import shutil
 from typing import Optional, List
 from research_agent.inno.registry import register_tool
 
 
+def _find_biomcp_binary() -> str:
+    """
+    Automatically find the biomcp binary.
+    
+    Checks in order:
+    1. .venv/bin/biomcp relative to current script location
+    2. .venv/bin/biomcp relative to current working directory
+    3. biomcp in system PATH
+    
+    Returns:
+        Path to biomcp binary
+        
+    Raises:
+        FileNotFoundError: If biomcp binary is not found
+    """
+    # Possible locations to check
+    possible_paths = [
+        # Relative to script location
+        os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".venv", "bin", "biomcp"),
+        # Relative to current working directory
+        os.path.join(os.getcwd(), ".venv", "bin", "biomcp"),
+    ]
+    
+    # Check each possible path
+    for path in possible_paths:
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            return path
+    
+    # Fall back to searching in PATH
+    biomcp_path = shutil.which("biomcp")
+    if biomcp_path:
+        return biomcp_path
+    
+    # If not found, raise an error
+    raise FileNotFoundError("biomcp binary not found. Please ensure it is installed in .venv/bin or in PATH.")
+
+
+# Auto-detect biomcp binary path
+BIOMCP_BINARY = _find_biomcp_binary()
+
+
 def _run_biomcp_command(args: List[str]) -> str:
     """Run biomcp CLI command and return output."""
-    cmd = ["biomcp"] + args
+    cmd = [BIOMCP_BINARY] + args
 
     # Pass environment variables including API keys
     env = os.environ.copy()

@@ -9,12 +9,34 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from paper_agent.gpt_client import GPTClient
+from constant import COMPLETION_MODEL
 
 
 def setup_logging(research_field):
-    os.makedirs(f"{research_field}/temp", exist_ok=True)
-    os.makedirs(f"{research_field}/target_sections", exist_ok=True)
-    os.makedirs(f"{research_field}/methodology_checkpoints", exist_ok=True)
+    # Check for environment variable first, then fall back to relative path
+    target_folder = os.environ.get("PAPER_TARGET_FOLDER")
+    if target_folder:
+        # target_folder is like base/research_field/target_sections/instance_id
+        # We need base/research_field for temp and checkpoints
+        parts = target_folder.split("/target_sections/")
+        if len(parts) > 1:
+            base_dir = parts[0]
+        else:
+            base_dir = target_folder
+    else:
+        base_dir = research_field
+
+    os.makedirs(f"{base_dir}/temp", exist_ok=True)
+    os.makedirs(f"{base_dir}/target_sections", exist_ok=True)
+    os.makedirs(f"{base_dir}/methodology_checkpoints", exist_ok=True)
+
+
+def get_output_dir(research_field, target_paper):
+    """Get the output directory for saving sections"""
+    target_folder = os.environ.get("PAPER_TARGET_FOLDER")
+    if target_folder:
+        return target_folder
+    return f"{research_field}/target_sections/{SectionComposer(None, '').normalize_title(target_paper)}"
 
     logging.basicConfig(
         level=logging.INFO,
@@ -32,7 +54,7 @@ class SectionComposer(ABC):
         research_field: str,
         section_name: str,
         structure_iterations: int = 3,
-        gpt_model="gpt-4o-mini-2024-07-18",
+        gpt_model=COMPLETION_MODEL,
     ):
         self.gpt_client = GPTClient(model=gpt_model)
         self.structure_iterations = structure_iterations

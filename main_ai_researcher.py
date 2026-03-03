@@ -219,7 +219,9 @@ def _find_references_for_topic(topic: str) -> str:
     return "\n".join(references)
 
 
-def main_ai_researcher(input, reference, mode, use_docker=None):
+def main_ai_researcher(
+    input, reference, mode, research_field="general", use_docker=None
+):
     load_dotenv()
     container_name = os.getenv("CONTAINER_NAME")
     workplace_name = os.getenv("WORKPLACE_NAME")
@@ -273,11 +275,11 @@ def main_ai_researcher(input, reference, mode, use_docker=None):
                 # After research completes, run writing module
                 from paper_agent import writing
 
-                research_field = "general"
+                instance_id = project_info.get("instance_id", "query_based")
                 asyncio.run(
                     writing.writing(
                         research_field,
-                        project_info.get("instance_id", "query_based"),
+                        instance_id,
                         agent_dir=project_info.get("agent_dir"),
                         model_dir=project_info.get("model_dir"),
                     )
@@ -328,11 +330,11 @@ def main_ai_researcher(input, reference, mode, use_docker=None):
                 # After research completes, run writing module
                 from paper_agent import writing
 
-                research_field = "general"
+                instance_id = project_info.get("instance_id", "query_based")
                 asyncio.run(
                     writing.writing(
                         research_field,
-                        project_info.get("instance_id", "query_based"),
+                        instance_id,
                         agent_dir=project_info.get("agent_dir"),
                         model_dir=project_info.get("model_dir"),
                     )
@@ -359,12 +361,13 @@ def main_ai_researcher(input, reference, mode, use_docker=None):
                     # Create project structure for paper writing
                     import json
 
-                    research_field = "general"
-                    instance_id = "deep_research"
+                    # Use project_root to avoid issues with cwd
+                    project_root = os.path.dirname(os.path.abspath(__file__))
+                    instance_id = result_info.get("instance_id", "deep_research")
 
                     # Create local_root similar to run_infer_plan
                     local_root = os.path.join(
-                        os.getcwd(),
+                        project_root,
                         "workplace_paper",
                         f"task_{instance_id}"
                         + "_"
@@ -380,8 +383,14 @@ def main_ai_researcher(input, reference, mode, use_docker=None):
                     os.makedirs(agent_dir, exist_ok=True)
                     os.makedirs(model_dir, exist_ok=True)
 
-                    # Save deep research result
-                    result_dir = f"./paper_agent/{research_field}/{instance_id}"
+                    # Save deep research result (use absolute path)
+                    project_root = os.path.dirname(os.path.abspath(__file__))
+                    default_paper_file = os.path.join(
+                        project_root, "workplace_paper", "paper.pdf"
+                    )
+                    paper_file = os.getenv("PAPER_FILE", default_paper_file)
+                    result_base = os.path.dirname(paper_file)
+                    result_dir = os.path.join(result_base, research_field, instance_id)
                     os.makedirs(result_dir, exist_ok=True)
                     with open(
                         os.path.join(result_dir, "deep_research_result.json"), "w"
@@ -392,6 +401,9 @@ def main_ai_researcher(input, reference, mode, use_docker=None):
                     with open(os.path.join(agent_dir, "research_result.md"), "w") as f:
                         f.write(f"# Research Topic: {input}\n\n")
                         f.write(result)
+
+                    # Change back to project root before running paper writing
+                    os.chdir(current_dir)
 
                     # Run paper writing with proper paths
                     from paper_agent import writing
@@ -430,7 +442,15 @@ if __name__ == "__main__":
         ],
         help="Research mode",
     )
+    parser.add_argument(
+        "--research_field",
+        type=str,
+        default="general",
+        help="Research field for paper writing (default: general)",
+    )
     args = parser.parse_args()
 
-    result = main_ai_researcher(args.input, args.reference, args.mode)
+    result = main_ai_researcher(
+        args.input, args.reference, args.mode, args.research_field
+    )
     print(f"Result: {result}")

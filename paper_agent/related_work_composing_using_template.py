@@ -280,7 +280,11 @@ Output the revised related work section incorporating all these improvements. Re
         self.write_temp_log(final_related_work, "post_checklist_related_work")
 
         # Save final output
-        output_dir = f"{self.research_field}/target_sections/{self.normalize_title(target_paper)}"
+        target_folder = os.environ.get("PAPER_TARGET_FOLDER")
+        if target_folder:
+            output_dir = target_folder
+        else:
+            output_dir = f"{self.research_field}/target_sections/{self.normalize_title(target_paper)}"
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, "related_work.tex")
 
@@ -303,14 +307,26 @@ async def related_work_composing(
         research_field=research_field, structure_iterations=1
     )
 
-    proj_dir = f"./paper_agent/{research_field}/{instance_id}/"
+    # Try to find proj_dir from the default location
+    import os
+
+    default_base = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".."
+    )
+    proj_dir = os.path.join(
+        default_base, "workplace_paper", research_field, instance_id
+    )
 
     # Use provided paths or fall back to default
     if agent_dir is None:
-        cache_dirs = [d for d in os.listdir(proj_dir) if d.startswith("cache_")]
-        if not cache_dirs:
-            raise ValueError("No cache directory found")
-        agent_dir = os.path.join(proj_dir, cache_dirs[-1], "agents")
+        if os.path.exists(proj_dir):
+            cache_dirs = [d for d in os.listdir(proj_dir) if d.startswith("cache_")]
+            if cache_dirs:
+                agent_dir = os.path.join(proj_dir, cache_dirs[-1], "agents")
+            else:
+                logging.warning(f"No cache directories found in {proj_dir}")
+        else:
+            logging.warning(f"Project directory {proj_dir} does not exist")
 
     if papers_dir is None:
         papers_dir = os.path.join(proj_dir, "workplace", "papers")

@@ -174,7 +174,11 @@ Output the revised conclusion section incorporating all these improvements. Repl
         self.write_temp_log(final_conclusion, "final_conclusion")
 
         # Save final output
-        output_dir = f"{self.research_field}/target_sections/{self.normalize_title(target_paper)}"
+        target_folder = os.environ.get("PAPER_TARGET_FOLDER")
+        if target_folder:
+            output_dir = target_folder
+        else:
+            output_dir = f"{self.research_field}/target_sections/{self.normalize_title(target_paper)}"
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, "conclusion.tex")
 

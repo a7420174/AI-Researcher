@@ -132,23 +132,45 @@ def main(
     if not topic:
         return {"error": "Error: Topic is required for deep research", "result": None}
 
+    # Generate instance_id from model (same pattern as run_infer_plan)
+    instance_id = f"deep_research"
+
+    # Get project root (parent of research_agent)
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
     async def run_research():
         flow = DeepResearchFlow(
-            cache_path=None,
-            log_path=None,
-            model=CHEEP_MODEL,
+            cache_path=os.path.join(
+                project_root,
+                "workplace_paper",
+                "cache_"
+                + instance_id
+                + "_"
+                + COMPLETION_MODEL.replace("/", "__").replace(":", "_"),
+            ),
+            log_path="log_" + instance_id,
+            model=COMPLETION_MODEL,
         )
         result = await flow.research(topic=topic, verify=verify)
         return result
 
     research_result = asyncio.run(run_research())
 
+    # Create local_root (same pattern as run_infer_plan)
+    local_root = os.path.join(
+        project_root,
+        "workplace_paper",
+        f"task_{instance_id}"
+        + "_"
+        + COMPLETION_MODEL.replace("/", "__").replace(":", "_"),
+    )
+    os.makedirs(local_root, exist_ok=True)
+
     # Return research result and project info
-    # Note: Deep Research doesn't create a full project, but we return paths for consistency
     return {
         "result": research_result,
-        "instance_id": "deep_research",
-        "local_root": "/tmp/deep_research",
+        "instance_id": instance_id,
+        "local_root": local_root,
         "agent_dir": None,
         "model_dir": None,
     }
