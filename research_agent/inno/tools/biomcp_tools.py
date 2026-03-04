@@ -6,50 +6,85 @@ from typing import Optional, List
 from research_agent.inno.registry import register_tool
 
 
+# Cache for the biomcp binary path
+_biomcp_binary_cache = None
+
+
 def _find_biomcp_binary() -> str:
     """
     Automatically find the biomcp binary.
-    
+
     Checks in order:
     1. .venv/bin/biomcp relative to current script location
     2. .venv/bin/biomcp relative to current working directory
     3. biomcp in system PATH
-    
+
     Returns:
         Path to biomcp binary
-        
+
     Raises:
         FileNotFoundError: If biomcp binary is not found
     """
-    # Possible locations to check
+    global _biomcp_binary_cache
+
+    if _biomcp_binary_cache is not None:
+        # Always verify the cached path still exists
+        if os.path.isfile(_biomcp_binary_cache) and os.access(
+            _biomcp_binary_cache, os.X_OK
+        ):
+            return _biomcp_binary_cache
+        # Cache is invalid, clear it
+        _biomcp_binary_cache = None
+
+    # Possible locations to check (in order of preference)
+    # 1. .venv/bin/biomcp relative to project root (4 levels up from this file)
+    # 2. .venv/bin/biomcp relative to current working directory
+    # 3. biomcp in system PATH
+    script_dir = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    )
     possible_paths = [
-        # Relative to script location
-        os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".venv", "bin", "biomcp"),
+        # Relative to script location (project root)
+        os.path.join(script_dir, ".venv", "bin", "biomcp"),
         # Relative to current working directory
         os.path.join(os.getcwd(), ".venv", "bin", "biomcp"),
     ]
-    
+
     # Check each possible path
     for path in possible_paths:
         if os.path.isfile(path) and os.access(path, os.X_OK):
+            _biomcp_binary_cache = path
             return path
-    
+
     # Fall back to searching in PATH
     biomcp_path = shutil.which("biomcp")
     if biomcp_path:
+        _biomcp_binary_cache = biomcp_path
         return biomcp_path
-    
-    # If not found, raise an error
-    raise FileNotFoundError("biomcp binary not found. Please ensure it is installed in .venv/bin or in PATH.")
+
+    # If not found, return a placeholder (will fail at runtime)
+    _biomcp_binary_cache = (
+        "biomcp"  # Use 'biomcp' as fallback, will fail gracefully if not found
+    )
+    return _biomcp_binary_cache
 
 
-# Auto-detect biomcp binary path
-BIOMCP_BINARY = _find_biomcp_binary()
+# Auto-detect biomcp binary path (deferred until actually used)
+BIOMCP_BINARY = None
+
+
+def _get_biomcp_binary() -> str:
+    """Lazy initialization of BIOMCP_BINARY"""
+    global BIOMCP_BINARY
+    if BIOMCP_BINARY is None:
+        BIOMCP_BINARY = _find_biomcp_binary()
+    return BIOMCP_BINARY
 
 
 def _run_biomcp_command(args: List[str]) -> str:
     """Run biomcp CLI command and return output."""
-    cmd = [BIOMCP_BINARY] + args
+    biomcp_bin = _get_biomcp_binary()
+    cmd = [biomcp_bin] + args
 
     # Pass environment variables including API keys
     env = os.environ.copy()

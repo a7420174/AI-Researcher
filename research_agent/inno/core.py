@@ -62,14 +62,14 @@ from research_agent.inno.memory.utils import (
 )
 import re
 
-# === [NEW] 기본 한도 (무료 티어 보수적 초기값) ===
-# 실제 한도는 AI Studio에서 확인 후 조정하세요. (프로젝트/모델/티어/시점에 따라 다름)
-# https://ai.google.dev/gemini-api/docs/rate-limits 참조
-DEFAULT_RPM = int(os.getenv("RPM_LIMIT", "10"))  # req/min
-DEFAULT_TPM = int(os.getenv("TPM_LIMIT", "250000"))
+# === [NEW] 기본 한도 (GROQ on-demand 기준) ===
+# GROQ llama-3.3-70b-versatile: RPM=30, TPM=12000
+# https://console.groq.com/docs/rate-limits 참조
+DEFAULT_RPM = int(os.getenv("RPM_LIMIT", "30"))
+DEFAULT_TPM = int(os.getenv("TPM_LIMIT", "12000"))  # GROQ on-demand TPM
 SAFE_TPM_RATIO = 0.8
 DEFAULT_TPM = int(DEFAULT_TPM * SAFE_TPM_RATIO)
-DEFAULT_RPD = int(os.getenv("RPD_LIMIT", "250"))
+DEFAULT_RPD = int(os.getenv("RPD_LIMIT", "500"))
 
 # litellm.set_verbose = True
 litellm.num_retries = 3

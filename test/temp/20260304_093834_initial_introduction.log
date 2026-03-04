@@ -1,0 +1,26 @@
+\section{Introduction}
+
+%-------------------------------------------------
+% Research Background
+%-------------------------------------------------
+The discovery of novel therapeutic compounds relies increasingly on computational models that can predict molecular properties with high accuracy and efficiency \cite{schneider2018}.  In this context, the problem of \emph{molecular property prediction}—estimating physicochemical, biological, or pharmacokinetic attributes from a molecular graph—has become a central task in cheminformatics and drug design.  Early approaches encode molecules as fixed-length fingerprints or descriptors and apply conventional machine‑learning algorithms such as random forests or support vector machines \cite{rogers2010}.  More recently, graph‑based deep learning methods have emerged, which treat atoms as nodes and chemical bonds as edges.  These methods can be grouped into three major research lines: (i) graph convolutional networks (GCNs) that aggregate neighbor information via spectral or spatial convolutions \cite{kipf2017}; (ii) message‑passing neural networks (MPNNs) that learn edge‑wise update functions to propagate information across the graph \cite{gilmer2017}; and (iii) attention‑based graph networks that assign learnable weights to different neighbors or substructures \cite{velivckovic2018}.  While each line offers distinct advantages—GCNs provide computational efficiency, MPNNs enable expressive message functions, and attention mechanisms improve interpretability—their performance often plateaus on large, heterogeneous chemical datasets.
+
+%-------------------------------------------------
+% Research Motivation
+%-------------------------------------------------
+Despite these advances, several critical gaps remain.  First, existing models frequently suffer from limited generalization to out‑of‑distribution molecules, especially when training data are scarce or biased toward certain chemical scaffolds \cite{zhang2020}.  Second, the interpretability of learned representations is still insufficient for medicinal chemists who require clear rationales for predicted activities.  For example, standard MPNNs treat all bonds uniformly, which can obscure the contribution of functional groups that drive bioactivity.  Third, most methods rely on supervised learning alone, ignoring the wealth of unlabeled molecular graphs that could be leveraged through self‑supervision.  These shortcomings motivate the following research questions: (1) How can a graph‑based model be made more robust to scaffold‑level distribution shifts? (2) In what ways can the model’s predictions be rendered more chemically interpretable? (3) Can self‑supervised pretraining substantially improve downstream property prediction under limited labeled data?  Addressing these questions promises to enhance both the reliability and usability of computational drug discovery pipelines.
+
+%-------------------------------------------------
+% Methodology Overview
+%-------------------------------------------------
+To tackle the identified challenges, we propose a hierarchical attention‑guided graph neural network (HA‑GNN) equipped with a dual‑stage self‑supervised pretraining scheme.  At the core of HA‑GNN lies a multi‑scale attention mechanism that first aggregates atom‑level messages within local substructures (e.g., rings or functional groups) and then integrates these substructure embeddings at a higher, graph‑level hierarchy.  This design enables the model to capture both fine‑grained chemical interactions and global molecular context, thereby improving robustness to scaffold variations.  Complementing the architecture, the pretraining stage comprises (i) a motif‑reconstruction task that forces the network to recover masked functional groups, and (ii) a graph‑level contrastive objective that discriminates between augmented views of the same molecule.  By jointly learning from these self‑supervised signals, HA‑GNN acquires rich, generalizable representations that can be fine‑tuned on downstream property prediction with few labeled examples.  The proposed framework directly addresses the limitations of existing GCN/MPNN models—enhancing distributional robustness, providing chemically meaningful attention maps, and exploiting abundant unlabeled data.
+
+%-------------------------------------------------
+% Contributions
+%-------------------------------------------------
+\begin{itemize}
+    \item We introduce a novel hierarchical attention architecture that simultaneously captures local substructure chemistry and global molecular topology, improving predictive robustness across diverse chemical scaffolds.
+    \item We design a dual‑stage self‑supervised pretraining paradigm—motif reconstruction and contrastive learning—that leverages large unlabeled molecular libraries to enrich feature learning.
+    \item We demonstrate that the proposed HA‑GNN achieves state‑of‑the‑art performance on multiple benchmark datasets, particularly under low‑resource settings, thereby validating its practical utility.
+    \item We provide extensive interpretability analyses showing that the learned attention weights align with known pharmacophores and functional groups, facilitating expert-driven validation of model predictions.
+\end{itemize}
