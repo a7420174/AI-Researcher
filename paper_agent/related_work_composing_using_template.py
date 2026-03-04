@@ -18,7 +18,7 @@ class RelatedWorkComposer(SectionComposer):
     async def generate_or_revise_structure(
         self, content: str, current_structure: str, iteration: int
     ) -> str:
-        prompt = f"""Based on the given content, generate or revise the related work structure, using latex format.
+        prompt = rf"""Based on the given content, generate or revise the related work structure, using latex format.
 Current iteration: {iteration}/{self.structure_iterations}
 
 Current structure (if exists):
@@ -80,7 +80,7 @@ Output only the LaTeX structure with comments as specified above."""
     ) -> str:
         writing_template = self.get_random_template()
 
-        prompt = f"""Write or revise the following subsection of the related work:
+        prompt = rf"""Write or revise the following subsection of the related work:
 \subsection{{{subsection}}}
 
 CURRENT TEXT (if any):
@@ -133,7 +133,7 @@ Output the detailed LaTeX text for this subsection only."""
         return await self.gpt_client.chat(prompt=prompt)
 
     async def final_writing_checklist(self, related_work_text: str) -> str:
-        prompt = f"""Review and revise the related work section following these academic writing guidelines:
+        prompt = rf"""Review and revise the related work section following these academic writing guidelines:
 
 Current related work text:
 {related_work_text}

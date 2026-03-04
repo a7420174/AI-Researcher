@@ -26,7 +26,7 @@ class MethodologyComposer(SectionComposer):
         return "\n".join(combined_code)
 
     async def generate_or_revise_structure(self, content, current_structure, iteration):
-        prompt = f"""Based on the given content, generate or revise the technical methodology structure of the proposed method, using latex format.
+        prompt = rf"""Based on the given content, generate or revise the technical methodology structure of the proposed method, using latex format.
 Current iteration: {iteration}/{self.structure_iterations}
 
 Current structure (if exists):
@@ -90,10 +90,9 @@ Output only the LaTeX structure with comments as specified above. Note again tha
         return await self.gpt_client.chat(prompt=prompt)
 
     async def detailize_subsection(self, structure, current_text, content, subsection):
-        # Get a random writing template
         writing_template = self.get_random_template()
 
-        prompt = f"""Revise or write the following subsection of the methodology section:
+        prompt = rf"""Revise or write the following subsection of the methodology section:
 \subsection{{{subsection}}}
 
 CURRENT TEXT (if any):
@@ -165,7 +164,7 @@ Output the detailed LaTeX text for this subsection only."""
         return await self.gpt_client.chat(prompt=prompt)
 
     async def final_writing_checklist(self, methodology_text: str) -> str:
-        prompt = f"""Review and revise the methodology section following these academic writing guidelines:
+        prompt = rf"""Review and revise the methodology section following these academic writing guidelines:
 
 Current methodology text:
 {methodology_text}

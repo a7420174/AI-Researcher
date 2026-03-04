@@ -16,8 +16,12 @@ class ConclusionComposer(SectionComposer):
 
     def read_section_content(self, target_paper: str, section_name: str) -> str:
         """Read content from an existing section file"""
-        normalized_title = self.normalize_title(target_paper)
-        section_path = f"{self.research_field}/target_sections/{normalized_title}/{section_name}.tex"
+        target_folder = os.environ.get("PAPER_TARGET_FOLDER")
+        if target_folder:
+            section_path = os.path.join(target_folder, f"{section_name}.tex")
+        else:
+            normalized_title = self.normalize_title(target_paper)
+            section_path = f"{self.research_field}/target_sections/{normalized_title}/{section_name}.tex"
         try:
             with open(section_path, "r", encoding="utf-8") as f:
                 return f.read()
@@ -26,7 +30,7 @@ class ConclusionComposer(SectionComposer):
             return ""
 
     async def generate_or_revise_structure(self, content, current_structure, iteration):
-        prompt = f"""Based on the given content, generate or revise the conclusion structure, using latex format.
+        prompt = rf"""Based on the given content, generate or revise the conclusion structure, using latex format.
 Current iteration: {iteration}/{self.structure_iterations}
 
 Current structure (if exists):

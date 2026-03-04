@@ -384,23 +384,24 @@ def main_ai_researcher(
                     os.makedirs(model_dir, exist_ok=True)
 
                     # Save deep research result (use absolute path)
-                    project_root = os.path.dirname(os.path.abspath(__file__))
-                    default_paper_file = os.path.join(
-                        project_root, "workplace_paper", "paper.pdf"
-                    )
-                    paper_file = os.getenv("PAPER_FILE", default_paper_file)
-                    result_base = os.path.dirname(paper_file)
-                    result_dir = os.path.join(result_base, research_field, instance_id)
-                    os.makedirs(result_dir, exist_ok=True)
-                    with open(
-                        os.path.join(result_dir, "deep_research_result.json"), "w"
-                    ) as f:
-                        json.dump({"result": result, "topic": input}, f)
-
-                    # Save result to agent_dir for paper writing
                     with open(os.path.join(agent_dir, "research_result.md"), "w") as f:
                         f.write(f"# Research Topic: {input}\n\n")
                         f.write(result)
+
+                    # Create agent JSON file for paper writing (Deep Research mode)
+                    agent_json_path = os.path.join(agent_dir, "deep_research_0.json")
+                    agent_data = {
+                        "messages": [
+                            {"role": "user", "content": input},
+                            {"role": "assistant", "content": result}
+                        ],
+                        "context_variables": {
+                            "topic": input,
+                            "research_result": result
+                        }
+                    }
+                    with open(agent_json_path, "w", encoding="utf-8") as f:
+                        json.dump(agent_data, f, ensure_ascii=False, indent=2)
 
                     # Change back to project root before running paper writing
                     os.chdir(current_dir)

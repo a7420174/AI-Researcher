@@ -17,8 +17,12 @@ class AbstractComposer(SectionComposer):
 
     def read_section_content(self, target_paper: str, section_name: str) -> str:
         """Read content from an existing section file"""
-        normalized_title = self.normalize_title(target_paper)
-        section_path = f"{self.research_field}/target_sections/{normalized_title}/{section_name}.tex"
+        target_folder = os.environ.get("PAPER_TARGET_FOLDER")
+        if target_folder:
+            section_path = os.path.join(target_folder, f"{section_name}.tex")
+        else:
+            normalized_title = self.normalize_title(target_paper)
+            section_path = f"{self.research_field}/target_sections/{normalized_title}/{section_name}.tex"
         try:
             with open(section_path, "r", encoding="utf-8") as f:
                 return f.read()
@@ -27,7 +31,7 @@ class AbstractComposer(SectionComposer):
             return ""
 
     async def generate_or_revise_structure(self, content, current_structure, iteration):
-        prompt = f"""Based on the given content, generate or revise the abstract structure, using latex format.
+        prompt = rf"""Based on the given content, generate or revise the abstract structure, using latex format.
 Current iteration: {iteration}/{self.structure_iterations}
 
 Current structure (if exists):
@@ -66,7 +70,7 @@ Output only the LaTeX structure with comments as specified above."""
 
     async def detailize_subsection(self, structure, current_text, content):
         writing_template = self.get_random_template()
-        prompt = f"""Write a comprehensive abstract based on the provided structure and content.
+        prompt = rf"""Write a comprehensive abstract based on the provided structure and content.
 
 CURRENT ABSTRACT VERSION (if any):
 {current_text}
@@ -81,7 +85,7 @@ Writing Guidelines:
 
 1. PROBLEM CONTEXT:
    - State research area and problem clearly
-   - Shortly recap existing research line
+   - Soon recap existing research line
    - Research motivation
    - Present specific problem
    - Highlight key challenges
@@ -109,7 +113,7 @@ Output the complete LaTeX text for the abstract section. Do not output any other
         return await self.gpt_client.chat(prompt=prompt)
 
     async def final_writing_checklist(self, abstract_text: str) -> str:
-        prompt = f"""Review and revise the abstract section following these guidelines:
+        prompt = rf"""Review and revise the abstract section following these guidelines:
 
 Current abstract text:
 {abstract_text}

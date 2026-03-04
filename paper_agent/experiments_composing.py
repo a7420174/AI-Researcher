@@ -64,7 +64,7 @@ class ExperimentsComposer(SectionComposer):
     async def generate_or_revise_structure(
         self, content: str, current_structure: str, iteration: int
     ) -> str:
-        prompt = f"""Based on the given content, generate or revise the experiments section structure, using latex format.
+        prompt = rf"""Based on the given content, generate or revise the experiments section structure, using latex format.
 Current iteration: {iteration}/{self.structure_iterations}
 
 Current structure (if exists):
@@ -174,7 +174,7 @@ Output the complete LaTeX structure with actual results filled in, keeping all o
     ) -> str:
         writing_template = self.get_random_template()
 
-        prompt = f"""Write or revise the following subsection of the experiments section:
+        prompt = rf"""Write or revise the following subsection of the experiments section:
 \subsection{{{subsection}}}
 
 CURRENT TEXT (if any):
@@ -198,7 +198,7 @@ Requirements for experiments writing:
    - Each point should be substantial and detailed
 
 2. SUBSECTION SPECIFIC REQUIREMENTS:
-   Experimental Setup:
+   Experimental Settings:
    - Comprehensive parameter settings in tables
    - Detailed training protocols in paragraphs
    - Hardware/software specifications as needed
@@ -233,7 +233,7 @@ Output the detailed LaTeX text for this subsection only. Do not include any othe
         return await self.gpt_client.chat(prompt=prompt)
 
     async def final_writing_checklist(self, experiments_text: str) -> str:
-        prompt = f"""Review and revise the experiments section following these academic writing guidelines:
+        prompt = rf"""Review and revise the experiments section following these academic writing guidelines:
 
 Current experiments text:
 {experiments_text}
