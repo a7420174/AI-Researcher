@@ -65,14 +65,14 @@ async def writing(
         clean_tex_files_in_folder(target_folder)
 
         tex_file_path = os.path.join(target_folder, "related_work.tex")
-        bib_file_path = os.path.join(target_folder, "iclr2025_conference.bib")
+        bib_file_path = os.path.join(target_folder, "final_paper.bib")
         if os.path.exists(tex_file_path):
             process_tex_file(tex_file_path, bib_file_path)
         else:
             print(f"Warning: {tex_file_path} not found, skipping tex processing")
 
         project_directory = target_folder
-        main_file = "iclr2025_conference.tex"
+        main_file = "final_paper.tex"
         if os.path.exists(os.path.join(project_directory, main_file)):
             compile_latex_project(project_directory, main_file)
         else:
