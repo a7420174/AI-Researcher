@@ -165,14 +165,28 @@ def main(
         + COMPLETION_MODEL.replace("/", "__").replace(":", "_"),
     )
     os.makedirs(local_root, exist_ok=True)
+    
+    # Create agent_dir and model_dir paths
+    workplace_name = "workplace"
+    agent_dir = os.path.join(local_root, workplace_name)
+    model_dir = os.path.join(local_root, workplace_name, "project")
+
+    os.makedirs(agent_dir, exist_ok=True)
+    os.makedirs(model_dir, exist_ok=True)
+
+    # Save deep research result (use absolute path)
+    with open(os.path.join(agent_dir, "research_result.md"), "w") as f:
+        f.write(f"# Research Topic: {input}\n\n")
+        f.write(result)
+
 
     # Return research result and project info
     return {
         "result": research_result,
         "instance_id": instance_id,
         "local_root": local_root,
-        "agent_dir": None,
-        "model_dir": None,
+        "agent_dir": agent_dir,
+        "model_dir": model_dir,
     }
 
 

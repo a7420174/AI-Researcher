@@ -175,9 +175,17 @@ Output the revised related work section incorporating all these improvements. Re
     ) -> str:
         # Dynamically get agent files from agent_dir
         agent_files = []
+        print(f"[DEBUG] agent_dir: {agent_dir}", flush=True)
+        print(f"[DEBUG] target_paper: {target_paper}", flush=True)
+        print(
+            f"[DEBUG] PAPER_TARGET_FOLDER: {os.environ.get('PAPER_TARGET_FOLDER')}",
+            flush=True,
+        )
         if os.path.exists(agent_dir):
             agent_files = [f for f in os.listdir(agent_dir) if f.endswith(".json")]
             agent_files.sort()
+        else:
+            print(f"[DEBUG] agent_dir does not exist!", flush=True)
 
         if not agent_files:
             logging.warning(f"No agent files found in {agent_dir}")
@@ -281,12 +289,15 @@ Output the revised related work section incorporating all these improvements. Re
 
         # Save final output
         target_folder = os.environ.get("PAPER_TARGET_FOLDER")
+        print(f"[DEBUG] target_folder from env: {target_folder}", flush=True)
         if target_folder:
             output_dir = target_folder
         else:
             output_dir = f"{self.research_field}/target_sections/{self.normalize_title(target_paper)}"
+            print(f"[DEBUG] Using fallback output_dir: {output_dir}", flush=True)
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, "related_work.tex")
+        print(f"[DEBUG] Saving to: {output_path}", flush=True)
 
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(final_related_work)

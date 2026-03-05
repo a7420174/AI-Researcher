@@ -257,7 +257,7 @@ def main_ai_researcher(
                 sub_dir = os.path.join(current_dir, "research_agent")
                 os.chdir(sub_dir)
 
-                from research_agent import run_infer_idea, run_infer_plan
+                from research_agent import run_infer_plan
 
                 args = get_args_research()
                 args.model = COMPLETION_MODEL
@@ -311,7 +311,7 @@ def main_ai_researcher(
                 sub_dir = os.path.join(current_dir, "research_agent")
                 os.chdir(sub_dir)
 
-                from research_agent import run_infer_idea, run_infer_plan
+                from research_agent import run_infer_idea
 
                 args = get_args_research()
 
@@ -335,6 +335,7 @@ def main_ai_researcher(
                     writing.writing(
                         research_field,
                         instance_id,
+                        local_root=project_info.get("local_root"),
                         agent_dir=project_info.get("agent_dir"),
                         model_dir=project_info.get("model_dir"),
                     )
@@ -358,38 +359,8 @@ def main_ai_researcher(
                 if isinstance(result_info, dict):
                     result = result_info.get("result", "")
 
-                    # Create project structure for paper writing
-                    import json
-
-                    # Use project_root to avoid issues with cwd
-                    project_root = os.path.dirname(os.path.abspath(__file__))
-                    instance_id = result_info.get("instance_id", "deep_research")
-
-                    # Create local_root similar to run_infer_plan
-                    local_root = os.path.join(
-                        project_root,
-                        "workplace_paper",
-                        f"task_{instance_id}"
-                        + "_"
-                        + COMPLETION_MODEL.replace("/", "__").replace(":", "_"),
-                    )
-                    os.makedirs(local_root, exist_ok=True)
-
-                    # Create agent_dir and model_dir paths
-                    workplace_name = "workplace"
-                    agent_dir = os.path.join(local_root, workplace_name)
-                    model_dir = os.path.join(local_root, workplace_name, "project")
-
-                    os.makedirs(agent_dir, exist_ok=True)
-                    os.makedirs(model_dir, exist_ok=True)
-
-                    # Save deep research result (use absolute path)
-                    with open(os.path.join(agent_dir, "research_result.md"), "w") as f:
-                        f.write(f"# Research Topic: {input}\n\n")
-                        f.write(result)
-
                     # Create agent JSON file for paper writing (Deep Research mode)
-                    agent_json_path = os.path.join(agent_dir, "deep_research_0.json")
+                    agent_json_path = os.path.join(result_info.get("agent_dir", ""), "deep_research_0.json")
                     agent_data = {
                         "messages": [
                             {"role": "user", "content": input},
@@ -413,12 +384,13 @@ def main_ai_researcher(
                         writing.writing(
                             research_field,
                             instance_id,
-                            agent_dir=agent_dir,
-                            model_dir=model_dir,
+                            local_root=result_info.get("local_root", ""),
+                            agent_dir=result_info.get("agent_dir", ""),
+                            model_dir=result_info.get("model_dir", ""),
                         )
                     )
 
-                    return f"Deep research and paper writing completed successfully. Result saved to {result_dir}"
+                    return f"Deep research and paper writing completed successfully."
                 return result_info
 
 

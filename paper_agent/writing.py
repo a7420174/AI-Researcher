@@ -89,6 +89,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--research_field", type=str, default="research")
     parser.add_argument("--instance_id", type=str, default="default")
+    parser.add_argument("--local_root", type=str, default=None)
     parser.add_argument("--agent_dir", type=str, default=None)
     parser.add_argument("--model_dir", type=str, default=None)
     args = parser.parse_args()
