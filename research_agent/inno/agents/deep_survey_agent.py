@@ -53,12 +53,14 @@ AVAILABLE TOOLS:
    - `biomcp_phenotype_search`: Search phenotypes
    - `biomcp_gene_enrich`: Gene-set enrichment analysis
 
-2. OpenAlex Search (for academic literature):
-   - `openalex_search_papers`: Search academic papers (RECOMMENDED - no rate limits)
-   - `openalex_search`: Advanced search with filters
+ 2. OpenAlex Search (for academic literature):
+    - `openalex_search_papers`: Search academic papers (RECOMMENDED for simple searches)
+      Parameters: query, year_from, year_to, primary_source, max_results
+    - `openalex_search`: Advanced search with filters
+      Parameters: query, filter (e.g., "publication_year:>=2020"), per_page, page, max_items, sort
 
-3. Web Search:
-   - `ddg_search`: DuckDuckGo web search for general information
+ 3. Web Search:
+    - `ddg_search`: DuckDuckGo web search for general information
 
 4. Analysis:
    - `llm_analyze`: Use LLM to analyze and synthesize research results
