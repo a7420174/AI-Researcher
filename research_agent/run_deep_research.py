@@ -5,8 +5,6 @@ This module uses the Deep Survey Agent for comprehensive research with verificat
 
 import os
 import asyncio
-import re
-import json
 from typing import Dict, Any, List, Union, Optional
 from dotenv import load_dotenv
 
@@ -92,25 +90,16 @@ Then provide the final research summary."""
             survey_messages, context_variables = await self.survey_agent(
                 messages, context_variables
             )
-            context_variables["notes"] = []
             survey_res = survey_messages[-1]["content"]
             context_variables["model_survey"] = survey_res
             
             # suggestion 추출 - fully_correct가 false면 suggestion을 다음 iteration에 전달
-            if '"fully_correct": true' in survey_res:
+            suggestion_dict = context_variables.get("suggestion_dict", {})
+            if suggestion_dict.get("fully_correct", False):
                 break
             
             # suggestion이 있으면 추출하여 다음 iteration에 전달
-            try:
-                # suggestion_dict에서 suggestion 추출
-                match = re.search(r'"suggestion":\s*\{([^}]+)\}', survey_res)
-                if match:
-                    suggestion_text = "{" + match.group(1) + "}"
-                else:
-                    # suggestion이 없으면 현재 결과를 그대로 다음으로
-                    suggestion_text = survey_res
-            except Exception:
-                suggestion_text = survey_res
+            suggestion_text = suggestion_dict.get("suggestion", "")
 
         return {
             "survey_result": survey_res,
