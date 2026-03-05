@@ -5,13 +5,14 @@ This module uses the Deep Survey Agent for comprehensive research with verificat
 
 import os
 import asyncio
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Union, Optional
 from dotenv import load_dotenv
 
-from research_agent.inno.registry import get_agent_factory
+from research_agent.inno.workflow.flowcache import FlowModule, AgentModule
+from research_agent.inno.registry import get_agent_factory, get_tool
 from research_agent.constant import COMPLETION_MODEL, CHEEP_MODEL
 from research_agent.inno.environment.markdown_browser import RequestsMarkdownBrowser
-from research_agent.inno.repl.repl import MetaChain
+from research_agent.inno.logger import MetaChainLogger
 
 # Registry bootstrap
 from app_bootstrap import bootstrap_registry
@@ -19,51 +20,38 @@ from app_bootstrap import bootstrap_registry
 bootstrap_registry()
 
 
-class DeepResearchFlow:
+class DeepResearchFlow(FlowModule):
     def __init__(
         self,
         cache_path: str = None,
-        log_path: str = None,
+        log_path: Union[str, None, MetaChainLogger] = None,
         model: str = "gpt-4o-2024-08-06",
+        file_env: Optional[RequestsMarkdownBrowser] = None,
     ):
-        self.cache_path = cache_path
-        self.model = model
-        self.log_path = log_path
-        self.file_env: Optional[RequestsMarkdownBrowser] = None
+        super().__init__(cache_path, log_path, model)
+        self.file_env = file_env
 
-    def _get_file_env(self) -> RequestsMarkdownBrowser:
-        """Get or create file environment."""
-        if self.file_env is None:
-            self.file_env = RequestsMarkdownBrowser(
-                local_root="/tmp",
-                workplace_name="research",
-            )
-        return self.file_env
+        get_deep_survey_agent = get_agent_factory("get_deep_survey_agent")
+        get_judge_agent = get_agent_factory("get_judge_agent")
 
-    async def research(
+        self.survey_agent = AgentModule(
+            get_deep_survey_agent(model=model, file_env=file_env),
+            self.client,
+            cache_path,
+        )
+        self.judge_agent = AgentModule(
+            get_judge_agent(model=model, file_env=file_env, code_env=None),
+            self.client,
+            cache_path,
+        )
+
+    async def forward(
         self,
-        topic: str,
-        max_search_results: int = 10,
-        verify: bool = True,
-    ) -> str:
-        """
-        Perform deep research on a given topic using Deep Survey Agent.
-
-        Args:
-            topic: The research topic/question
-            max_search_results: Maximum number of search results to gather
-            verify: Whether to run verification and fix iteration (default: True)
-
-        Returns:
-            Comprehensive research findings
-        """
-        try:
-            get_deep_survey_agent = get_agent_factory("get_deep_survey_agent")
-        except Exception as e:
-            return f"Error: Deep Survey Agent not available: {str(e)}"
-
-        file_env = self._get_file_env()
-        agent = get_deep_survey_agent(model=self.model, file_env=file_env)
+        topic: str = None,
+        *args,
+        **kwargs,
+    ):
+        context_variables = {}
 
         research_prompt = f"""Please perform comprehensive research on the following topic:
 
@@ -75,8 +63,6 @@ IMPORTANT SEARCH INSTRUCTIONS:
      NOT just "ADC" or "IL1RAP" alone.
    - Use compound search terms like "IL1RAP ADC", "IL1RAP antibody-drug conjugate"
 2. Search WITHOUT year limits to get the latest information (do NOT restrict to 2024)
-3. After completing research, you MUST call transfer_to_judge_agent automatically,
-   do NOT ask the user - just proceed with the transfer.
 
 Research Requirements:
 1. Search and analyze information from BioMCP (biomedical databases) - use EXACT topic terms
@@ -93,25 +79,30 @@ Please provide:
 - Sources and references
 
 After providing the initial summary, verify and fix any issues found (up to 3 iterations).
-Then automatically call transfer_to_judge_agent with the final research summary.
-"""
+Then provide the final research summary."""
 
-        try:
-            client = MetaChain()
-            response = client.run(
-                agent=agent,
-                messages=[{"role": "user", "content": research_prompt}],
-                context_variables={},
-            )
+        messages = [{"role": "user", "content": research_prompt}]
+        survey_messages, context_variables = await self.survey_agent(
+            messages, context_variables
+        )
+        survey_res = survey_messages[-1]["content"]
 
-            if hasattr(response, "messages") and response.messages:
-                last_message = response.messages[-1]
-                if hasattr(last_message, "content"):
-                    return last_message.content
-                return str(last_message)
-            return str(response)
-        except Exception as e:
-            return f"Error during research: {str(e)}"
+        judge_prompt = f"""Please review the following research summary for accuracy, completeness, and quality:
+
+{survey_res}
+
+Provide your final review and verdict on this research."""
+
+        input_messages = [{"role": "user", "content": judge_prompt}]
+        judge_messages, context_variables = await self.judge_agent(
+            input_messages, context_variables
+        )
+        judge_res = judge_messages[-1]["content"]
+
+        return {
+            "survey_result": survey_res,
+            "judge_result": judge_res,
+        }
 
 
 def main(
@@ -132,31 +123,9 @@ def main(
     if not topic:
         return {"error": "Error: Topic is required for deep research", "result": None}
 
-    # Generate instance_id from model (same pattern as run_infer_plan)
     instance_id = f"deep_research"
 
-    # Get project root (parent of research_agent)
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-    async def run_research():
-        flow = DeepResearchFlow(
-            cache_path=os.path.join(
-                project_root,
-                "workplace_paper",
-                "cache_"
-                + instance_id
-                + "_"
-                + COMPLETION_MODEL.replace("/", "__").replace(":", "_"),
-            ),
-            log_path="log_" + instance_id,
-            model=COMPLETION_MODEL,
-        )
-        result = await flow.research(topic=topic, verify=verify)
-        return result
-
-    research_result = asyncio.run(run_research())
-
-    # Create local_root (same pattern as run_infer_plan)
     local_root = os.path.join(
         project_root,
         "workplace_paper",
@@ -165,8 +134,28 @@ def main(
         + COMPLETION_MODEL.replace("/", "__").replace(":", "_"),
     )
     os.makedirs(local_root, exist_ok=True)
-    
-    # Create agent_dir and model_dir paths
+
+    file_env = RequestsMarkdownBrowser(
+        local_root=local_root,
+        workplace_name="workplace",
+    )
+
+    flow = DeepResearchFlow(
+        cache_path=os.path.join(
+            project_root,
+            "workplace_paper",
+            "cache_"
+            + instance_id
+            + "_"
+            + COMPLETION_MODEL.replace("/", "__").replace(":", "_"),
+        ),
+        log_path="log_" + instance_id,
+        file_env=file_env,
+        model=COMPLETION_MODEL,
+    )
+
+    result = asyncio.run(flow(topic=topic))
+
     workplace_name = "workplace"
     agent_dir = os.path.join(local_root, workplace_name)
     model_dir = os.path.join(local_root, workplace_name, "project")
@@ -174,15 +163,15 @@ def main(
     os.makedirs(agent_dir, exist_ok=True)
     os.makedirs(model_dir, exist_ok=True)
 
-    # Save deep research result (use absolute path)
     with open(os.path.join(agent_dir, "research_result.md"), "w") as f:
-        f.write(f"# Research Topic: {input}\n\n")
-        f.write(result)
+        f.write(f"# Research Topic: {topic}\n\n")
+        f.write(result.get("survey_result", ""))
+        f.write("\n\n## Judge Review\n\n")
+        f.write(result.get("judge_result", ""))
 
-
-    # Return research result and project info
     return {
-        "result": research_result,
+        "result": result.get("survey_result", ""),
+        "judge_result": result.get("judge_result", ""),
         "instance_id": instance_id,
         "local_root": local_root,
         "agent_dir": agent_dir,
