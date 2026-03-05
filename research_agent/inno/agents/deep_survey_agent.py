@@ -151,31 +151,11 @@ When finished, provide the final verified research summary.
     ]
     tools = get_tools(tool_names, env=file_env, env_wrapper=with_env_file)
 
-    def transfer_to_judge_agent(research_summary: str, context_variables: dict = None):
-        """
-        Transfer the completed research to the Judge Agent for final review.
-
-        Args:
-            research_summary: The final verified research summary
-        """
-        if context_variables is None:
-            context_variables = {}
-        context_variables["research_summary"] = research_summary
-        ret_val = f"""Research completed. Summary:
-
-{research_summary}
-
-Please review this research for final verification."""
-        return Result(
-            value=ret_val,
-            context_variables=context_variables,
-        )
-
     agent = Agent(
         name="Deep Survey Agent",
         model=model,
         instructions=instructions,
-        functions=tools + [transfer_to_judge_agent, case_resolved],
+        functions=tools + [case_resolved],
         tool_choice="required",
     )
 
