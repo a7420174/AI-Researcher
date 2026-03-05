@@ -136,7 +136,10 @@ class InnoFlow(FlowModule):
         get_survey_agent = get_agent_factory("get_survey_agent")
         get_exp_analyser_agent = get_agent_factory("get_exp_analyser_agent")
 
-        download_arxiv_source_by_title = get_tool("download_arxiv_source_by_title")
+        # BiomCP and OpenAlex tools for paper search (better for biomedical research)
+        biomcp_article_search = get_tool("biomcp_article_search")
+        biomcp_article_get = get_tool("biomcp_article_get")
+        openalex_search_papers = get_tool("openalex_search_papers")
 
         # AgentModule/ToolModule 바인딩
         self.prepare_agent = AgentModule(
@@ -144,7 +147,35 @@ class InnoFlow(FlowModule):
             self.client,
             cache_path,
         )
-        self.download_paper = ToolModule(download_arxiv_source_by_title, cache_path)
+
+        # BiomCP/OpenAlex based paper search (instead of arxiv)
+        def search_papers_biomcp(query: str, limit: int = 10) -> str:
+            """Search papers using BioMCP and OpenAlex"""
+            results = []
+
+            # Try BioMCP first
+            try:
+                biomcp_result = biomcp_article_search(keyword=query, limit=limit)
+                if biomcp_result:
+                    results.append(
+                        f"=== BioMCP Search Results for '{query}' ===\n biomcp_result"
+                    )
+            except Exception as e:
+                results.append(f"BioMCP search failed: {e}")
+
+            # Try OpenAlex
+            try:
+                openalex_result = openalex_search_papers(query=query, limit=limit)
+                if openalex_result:
+                    results.append(
+                        f"=== OpenAlex Search Results for '{query}' ===\n{openalex_result}"
+                    )
+            except Exception as e:
+                results.append(f"OpenAlex search failed: {e}")
+
+            return "\n\n".join(results) if results else "No paper search results found."
+
+        self.search_papers = ToolModule(search_papers_biomcp, cache_path)
         self.coding_plan_agent = AgentModule(
             get_coding_plan_agent(model=CHEEP_MODEL, code_env=code_env),
             self.client,
@@ -226,13 +257,17 @@ Your task is to choose at least 5 repositories as the reference codebases.
                     f"경고: reference_papers를 찾을 수 없음. prepare_dict: {prepare_dict}"
                 )
                 paper_list = []
-            download_res = self.download_paper(
-                {
-                    "paper_list": paper_list,
-                    "local_root": local_root,
-                    "workplace_name": workplace_name,
-                }
-            )
+
+            # Search papers using BioMCP and OpenAlex (instead of arxiv)
+            download_res = ""
+            if paper_list:
+                for paper in paper_list[:3]:  # Search top 3 papers
+                    search_result = self.search_papers({"query": paper})
+                    download_res += f"\n\n=== Search for: {paper} ===\n{search_result}"
+            else:
+                # If no specific papers, search using the ideas/references
+                search_result = self.search_papers({"query": ideas or references})
+                download_res = search_result
         survey_query = f"""\
 I have an innovative ideas related to machine learning:
 {ideas}
@@ -692,6 +727,10 @@ def main(args, ideas, references, task_instructions=None):
 
 
 if __name__ == "__main__":
+    import sys
+
+    # Prevent argparse from parsing sys.argv during import
+    sys.argv = [""]
     args = get_args()
     # 외부에서 ideas/references를 구성해 넘겨주세요.
     main(args, ideas="", references="")

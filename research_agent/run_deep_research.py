@@ -32,15 +32,9 @@ class DeepResearchFlow(FlowModule):
         self.file_env = file_env
 
         get_deep_survey_agent = get_agent_factory("get_deep_survey_agent")
-        get_judge_agent = get_agent_factory("get_judge_agent")
 
         self.survey_agent = AgentModule(
             get_deep_survey_agent(model=model, file_env=file_env),
-            self.client,
-            cache_path,
-        )
-        self.judge_agent = AgentModule(
-            get_judge_agent(model=model, file_env=file_env, code_env=None),
             self.client,
             cache_path,
         )
@@ -48,12 +42,16 @@ class DeepResearchFlow(FlowModule):
     async def forward(
         self,
         topic: str = None,
+        max_iter_times: int = 1,
         *args,
         **kwargs,
     ):
         context_variables = {}
 
-        research_prompt = f"""Please perform comprehensive research on the following topic:
+        MAX_ITER_TIMES = max_iter_times
+        survey_res = ""
+        for i in range(MAX_ITER_TIMES):
+            research_prompt = f"""Please perform comprehensive research on the following topic:
 
 Topic: {topic}
 
@@ -78,86 +76,37 @@ Please provide:
 - Clinical trial information
 - Sources and references
 
-After providing the initial summary, verify and fix any issues found (up to 3 iterations).
+After reviewing, use the `case_resolved` function to provide your final verdict:
+- Set `fully_correct` to True if the research is satisfactory
+- If not fully correct, provide suggestions for improvement
+- From the suggestions, verify and fix any issues found.
 Then provide the final research summary."""
 
-        messages = [{"role": "user", "content": research_prompt}]
+            messages = [{"role": "user", "content": research_prompt}]
 
-        max_retries = 3
-        retry_count = 0
-        last_res = None
-        survey_res = None
-
-        while retry_count < max_retries:
             survey_messages, context_variables = await self.survey_agent(
                 messages, context_variables
             )
-            current_res = survey_messages[-1]["content"]
-
-            if current_res == last_res:
-                retry_count += 1
-                if retry_count >= max_retries:
-                    survey_res = current_res
-                    break
-            else:
-                retry_count = 0
-                survey_res = current_res
-                last_res = current_res
-                if (
-                    "final verified research summary" in current_res.lower()
-                    or "research completed" in current_res.lower()
-                ):
-                    break
-
-            messages = [
-                {
-                    "role": "user",
-                    "content": "Please continue with the research and provide the final summary.",
-                }
-            ]
-
-        if survey_res is None:
-            survey_res = (
-                last_res if last_res else "Research completed but no summary available."
-            )
-
-        judge_prompt = f"""Please review the following research summary for accuracy, completeness, and quality.
-
-Research Summary to Review:
-{survey_res}
-
-After reviewing, use the `case_resolved` function to provide your final verdict:
-- Set `fully_correct` to True if the research is satisfactory
-- Set `review_type` to "response_review"
-- If not fully correct, provide suggestions for improvement"""
-
-        input_messages = [{"role": "user", "content": judge_prompt}]
-        judge_messages, context_variables = await self.judge_agent(
-            input_messages, context_variables
-        )
-
-        if '"fully_correct": true' in judge_messages[-1]["content"]:
-            judge_res = judge_messages[-1]["content"]
-        else:
-            judge_res = judge_messages[-1]["content"]
+            context_variables["notes"] = []
+            survey_res = survey_messages[-1]["content"]
+            context_variables["model_survey"] = survey_res
+            if '"fully_correct": true' in survey_res:
+                break
 
         return {
             "survey_result": survey_res,
-            "judge_result": judge_res,
         }
 
 
 def main(
-    topic: str, reference: str = None, use_docker: bool = None, verify: bool = True
+    topic: str, max_iter_times: int = 1
 ):
     """
     Main entry point for Deep Research using Agent.
 
     Args:
         topic: The research topic/question
-        reference: Optional reference papers (not used in Deep Research mode)
-        use_docker: Whether to use Docker (not used - Deep Research is Docker-independent)
-        verify: Whether to run verification and fix iteration (default: True)
+        max_iter_times: Maximum of iteration times
 
     Returns:
         dict: Contains 'result' (research findings) and project paths
@@ -196,7 +145,10 @@ def main(
         model=COMPLETION_MODEL,
     )
 
-    result = asyncio.run(flow(topic=topic))
+    result = asyncio.run(flow(
+        topic=topic,
+        max_iter_times=max_iter_times,
+    ))
 
     workplace_name = "workplace"
     agent_dir = os.path.join(local_root, workplace_name)
@@ -208,12 +160,9 @@ def main(
     with open(os.path.join(agent_dir, "research_result.md"), "w") as f:
         f.write(f"# Research Topic: {topic}\n\n")
         f.write(result.get("survey_result", ""))
-        f.write("\n\n## Judge Review\n\n")
-        f.write(result.get("judge_result", ""))
 
     return {
         "result": result.get("survey_result", ""),
-        "judge_result": result.get("judge_result", ""),
         "instance_id": instance_id,
         "local_root": local_root,
         "agent_dir": agent_dir,
@@ -228,16 +177,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--topic", type=str, required=True, help="Research topic/question"
     )
-    parser.add_argument(
-        "--model", type=str, default=None, help="Model to use (default: CHEEP_MODEL)"
-    )
-    parser.add_argument(
-        "--no-verify",
-        action="store_true",
-        help="Skip verification step",
-    )
+    parser.add_argument("--max-iter-times", type=int, default=5)
+
 
     args = parser.parse_args()
 
-    result = main(topic=args.topic, verify=not args.no_verify)
+    result = main(topic=args.topic, max_iter_times=args.max_iter_times)
     print(result)

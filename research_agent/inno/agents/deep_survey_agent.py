@@ -1,4 +1,5 @@
-from typing import List, Optional
+import json
+from typing import List, Optional, Dict
 
 from research_agent.inno.tools.file_surfer_tool import with_env as with_env_file
 from research_agent.inno.environment.markdown_browser import RequestsMarkdownBrowser
@@ -11,6 +12,36 @@ from research_agent.inno.registry import (
     get_tools,
 )
 
+
+
+def case_resolved(
+    context_variables,
+    fully_correct: bool,
+    suggestion: Optional[Dict[str, str]] = None,
+):
+    """
+    Use this function when you have finished the task.
+    You can only use this function after you have checked the results.
+
+    Args:
+       fully_correct: whether the implementation/response is fully correct. If not, provide suggestions.
+       suggestion: dict {key_point: suggestion}. If fully_correct, set to None.
+    """
+    suggestion_dict = {
+        "fully_correct": fully_correct,
+    }
+
+    if suggestion:
+        suggestion_dict["suggestion"] = suggestion
+
+    context_variables["suggestion_dict"] = suggestion_dict
+    ret_val = f"""\
+Here is the suggestion about the review:
+Whether the result is fully correct: {fully_correct}
+The suggestion about the review:
+{json.dumps(suggestion_dict, indent=4)}
+"""
+    return ret_val
 
 @register_agent("get_deep_survey_agent")
 def get_deep_survey_agent(model: str, **kwargs):

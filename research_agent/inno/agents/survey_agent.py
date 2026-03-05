@@ -69,7 +69,9 @@ AVAILABLE TOOLS:
 
 4. OpenAlex Search (PRIORITY for academic literature - no rate limits, better abstracts):
    - `openalex_search_papers`: Search academic papers from OpenAlex (RECOMMENDED for literature review)
-   - `openalex_search`: Advanced search with filters (year, source, etc.)
+     Parameters: query, year_from, year_to, primary_source, max_results
+   - `openalex_search`: Advanced search with filters
+     Parameters: query, filter (e.g., "publication_year:>=2020"), per_page, page, max_items, sort
    - Use OpenAlex instead of web search when possible for better results
 
 WORKFLOW:

@@ -340,7 +340,7 @@ def openalex_search_papers(
         year_to: 종료 연도
         primary_source: 주요 출처 (예: "Nature", "Science", "Cell")
         max_results: 최대 결과 수
-        api_key: OpenAlex API 키 (환경변수 OPENALEX_API_KEY也可)
+        api_key: OpenAlex API 키 (환경변수 OPENALEX_API_KEY)
 
     Returns:
         포맷된 검색 결과 문자열

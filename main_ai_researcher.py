@@ -257,9 +257,24 @@ def main_ai_researcher(
                 sub_dir = os.path.join(current_dir, "research_agent")
                 os.chdir(sub_dir)
 
-                from research_agent import run_infer_plan
+                # Prevent argparse from parsing sys.argv during import
+                import sys
 
-                args = get_args_research()
+                original_argv = sys.argv.copy()
+                sys.argv = [""]
+
+                from research_agent import run_infer_plan
+                from research_agent import run_infer_plan as rp_module
+                from constant import COMPLETION_MODEL
+
+                # Restore argv after import
+                sys.argv = original_argv
+
+                # Create args object directly without parsing sys.argv
+                class Args:
+                    pass
+
+                args = Args()
                 args.model = COMPLETION_MODEL
                 args.container_name = container_name
                 args.workplace_name = workplace_name
@@ -267,8 +282,12 @@ def main_ai_researcher(
                 args.port = port
                 args.max_iter_times = max_iter_times
                 args.use_docker = use_docker
+                args.conda_path = None
+                args.use_conda = False
+                args.uv_path = None
+                args.venv_path = None
 
-                project_info = run_infer_plan.main(
+                project_info = rp_module.main(
                     args, input, found_reference or reference, input
                 )
 
@@ -360,16 +379,18 @@ def main_ai_researcher(
                     result = result_info.get("result", "")
 
                     # Create agent JSON file for paper writing (Deep Research mode)
-                    agent_json_path = os.path.join(result_info.get("agent_dir", ""), "deep_research_0.json")
+                    agent_json_path = os.path.join(
+                        result_info.get("agent_dir", ""), "deep_research_0.json"
+                    )
                     agent_data = {
                         "messages": [
                             {"role": "user", "content": input},
-                            {"role": "assistant", "content": result}
+                            {"role": "assistant", "content": result},
                         ],
                         "context_variables": {
                             "topic": input,
-                            "research_result": result
-                        }
+                            "research_result": result,
+                        },
                     }
                     with open(agent_json_path, "w", encoding="utf-8") as f:
                         json.dump(agent_data, f, ensure_ascii=False, indent=2)
