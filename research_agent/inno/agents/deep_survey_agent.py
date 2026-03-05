@@ -87,7 +87,7 @@ IMPORTANT:
 - Verify and fix issues iteratively
 - Provide comprehensive results with sources
 
-When finished, use `transfer_to_judge_agent` to transfer the results to the Judge Agent for final review.
+When finished, provide the final verified research summary.
 """
 
     tool_names = [
