@@ -5,6 +5,8 @@ This module uses the Deep Survey Agent for comprehensive research with verificat
 
 import os
 import asyncio
+import re
+import json
 from typing import Dict, Any, List, Union, Optional
 from dotenv import load_dotenv
 
@@ -50,10 +52,13 @@ class DeepResearchFlow(FlowModule):
 
         MAX_ITER_TIMES = max_iter_times
         survey_res = ""
+        suggestion_text = ""
         for i in range(MAX_ITER_TIMES):
+            # 이전 iteration의 suggestion을 현재 프롬프트에 포함
+            suggestion_prefix = f"\n\nPrevious iteration suggestions:\n{suggestion_text}\n\nPlease address these suggestions in your research.\n" if suggestion_text else ""
             research_prompt = f"""Please perform comprehensive research on the following topic:
 
-Topic: {topic}
+Topic: {topic}{suggestion_prefix}
 
 IMPORTANT SEARCH INSTRUCTIONS:
 1. When searching for drug/trial/article databases, ALWAYS use the EXACT topic terms.
@@ -90,8 +95,22 @@ Then provide the final research summary."""
             context_variables["notes"] = []
             survey_res = survey_messages[-1]["content"]
             context_variables["model_survey"] = survey_res
+            
+            # suggestion 추출 - fully_correct가 false면 suggestion을 다음 iteration에 전달
             if '"fully_correct": true' in survey_res:
                 break
+            
+            # suggestion이 있으면 추출하여 다음 iteration에 전달
+            try:
+                # suggestion_dict에서 suggestion 추출
+                match = re.search(r'"suggestion":\s*\{([^}]+)\}', survey_res)
+                if match:
+                    suggestion_text = "{" + match.group(1) + "}"
+                else:
+                    # suggestion이 없으면 현재 결과를 그대로 다음으로
+                    suggestion_text = survey_res
+            except Exception:
+                suggestion_text = survey_res
 
         return {
             "survey_result": survey_res,

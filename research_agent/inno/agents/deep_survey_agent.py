@@ -3,8 +3,6 @@ from typing import List, Optional, Dict
 
 from research_agent.inno.tools.file_surfer_tool import with_env as with_env_file
 from research_agent.inno.environment.markdown_browser import RequestsMarkdownBrowser
-from research_agent.inno.environment.docker_env import with_env as with_env_docker
-from research_agent.inno.environment.docker_env import DockerEnv
 from research_agent.inno.types import Agent, Result
 
 from research_agent.inno.registry import (
@@ -177,7 +175,7 @@ Please review this research for final verification."""
         name="Deep Survey Agent",
         model=model,
         instructions=instructions,
-        functions=tools + [transfer_to_judge_agent],
+        functions=tools + [transfer_to_judge_agent, case_resolved],
         tool_choice="required",
     )
 
