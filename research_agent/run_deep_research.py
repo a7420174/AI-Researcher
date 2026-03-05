@@ -82,22 +82,64 @@ After providing the initial summary, verify and fix any issues found (up to 3 it
 Then provide the final research summary."""
 
         messages = [{"role": "user", "content": research_prompt}]
-        survey_messages, context_variables = await self.survey_agent(
-            messages, context_variables
-        )
-        survey_res = survey_messages[-1]["content"]
 
-        judge_prompt = f"""Please review the following research summary for accuracy, completeness, and quality:
+        max_retries = 3
+        retry_count = 0
+        last_res = None
+        survey_res = None
 
+        while retry_count < max_retries:
+            survey_messages, context_variables = await self.survey_agent(
+                messages, context_variables
+            )
+            current_res = survey_messages[-1]["content"]
+
+            if current_res == last_res:
+                retry_count += 1
+                if retry_count >= max_retries:
+                    survey_res = current_res
+                    break
+            else:
+                retry_count = 0
+                survey_res = current_res
+                last_res = current_res
+                if (
+                    "final verified research summary" in current_res.lower()
+                    or "research completed" in current_res.lower()
+                ):
+                    break
+
+            messages = [
+                {
+                    "role": "user",
+                    "content": "Please continue with the research and provide the final summary.",
+                }
+            ]
+
+        if survey_res is None:
+            survey_res = (
+                last_res if last_res else "Research completed but no summary available."
+            )
+
+        judge_prompt = f"""Please review the following research summary for accuracy, completeness, and quality.
+
+Research Summary to Review:
 {survey_res}
 
-Provide your final review and verdict on this research."""
+After reviewing, use the `case_resolved` function to provide your final verdict:
+- Set `fully_correct` to True if the research is satisfactory
+- Set `review_type` to "response_review"
+- If not fully correct, provide suggestions for improvement"""
 
         input_messages = [{"role": "user", "content": judge_prompt}]
         judge_messages, context_variables = await self.judge_agent(
             input_messages, context_variables
         )
-        judge_res = judge_messages[-1]["content"]
+
+        if '"fully_correct": true' in judge_messages[-1]["content"]:
+            judge_res = judge_messages[-1]["content"]
+        else:
+            judge_res = judge_messages[-1]["content"]
 
         return {
             "survey_result": survey_res,
