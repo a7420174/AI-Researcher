@@ -345,10 +345,10 @@ def ddg_search(query: str, max_results: int = 10):
         Formatted search results with titles, URLs, and snippets.
     """
     try:
-        from ddgs import DDGS
+        from duckduckgo_search import DDGS
 
-        duckduckgo_search = DDGS()
-        results = duckduckgo_search.text(query, max_results=max_results)
+        ddgs = DDGS()
+        results = ddgs.text(query, max_results=max_results)
 
         if not results:
             return f"No results found for: {query}"
