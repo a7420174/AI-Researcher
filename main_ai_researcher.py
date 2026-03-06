@@ -372,7 +372,7 @@ def main_ai_researcher(
                 from research_agent import run_deep_research
                 from constant import COMPLETION_MODEL
 
-                result_info = run_deep_research.main(topic=input, max_iter_times=args.max_iter_times)
+                result_info = run_deep_research.main(topic=input, max_iter_times=max_iter_times)
 
                 # Handle both old string return and new dict return
                 if isinstance(result_info, dict):
