@@ -372,7 +372,7 @@ def main_ai_researcher(
                 from research_agent import run_deep_research
                 from constant import COMPLETION_MODEL
 
-                result_info = run_deep_research.main(topic=input, max_iter_times=5)
+                result_info = run_deep_research.main(topic=input, max_iter_times=args.max_iter_times)
 
                 # Handle both old string return and new dict return
                 if isinstance(result_info, dict):
@@ -404,7 +404,7 @@ def main_ai_researcher(
                     asyncio.run(
                         writing.writing(
                             research_field,
-                            instance_id,
+                            instance_id=result_info.get("instance_id", ""),
                             local_root=result_info.get("local_root", ""),
                             agent_dir=result_info.get("agent_dir", ""),
                             model_dir=result_info.get("model_dir", ""),

@@ -1,3 +1,5 @@
+from typing import Optional
+
 from paper_agent.methodology_composing_using_template import methodology_composing
 from paper_agent.related_work_composing_using_template import related_work_composing
 from paper_agent.experiments_composing import experiments_composing
@@ -13,18 +15,13 @@ from paper_agent.tex_writer import compile_latex_project
 
 load_dotenv()
 
-PAPER_AGENT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAULT_PAPER_FILE = os.path.join(
-    os.path.dirname(PAPER_AGENT_ROOT), "workplace_paper", "paper.pdf"
-)
-PAPER_FILE = os.getenv("PAPER_FILE", DEFAULT_PAPER_FILE)
-
 
 async def writing(
     research_field: str,
     instance_id: str,
-    agent_dir: str = None,
-    model_dir: str = None,
+    local_root: str,
+    agent_dir: Optional[str] = None,
+    model_dir: Optional[str] = None,
 ):
     """
     Compose and generate paper sections.
@@ -32,21 +29,14 @@ async def writing(
     Args:
         research_field: The research field (e.g., 'research')
         instance_id: The instance identifier
-        agent_dir: Optional agent directory from research (overrides default path)
-        model_dir: Optional model directory from research (overrides default path)
+        local_root: The local root directory for output
+        agent_dir: Optional agent directory from research
+        model_dir: Optional model directory from research
     """
-    # Use PAPER_FILE env var for output, or default to research_field/instance_id based path
-    target_base = (
-        os.path.dirname(PAPER_FILE)
-        if PAPER_FILE
-        else os.path.join(PAPER_AGENT_ROOT, research_field)
-    )
-    # Include research_field in path to match composing functions
     target_folder = os.path.join(
-        target_base, research_field, "target_sections", instance_id
+        local_root, research_field, "target_sections", instance_id
     )
 
-    # Set environment variable for composing functions to find the correct output directory
     os.environ["PAPER_TARGET_FOLDER"] = target_folder
     os.environ["PAPER_RESEARCH_FIELD"] = research_field
 
@@ -55,9 +45,11 @@ async def writing(
     os.makedirs(target_folder, exist_ok=True)
 
     try:
-        await methodology_composing(research_field, instance_id, agent_dir, model_dir)
-        await related_work_composing(research_field, instance_id, agent_dir)
-        await experiments_composing(research_field, instance_id, agent_dir)
+        await methodology_composing(
+            research_field, instance_id, agent_dir or "", model_dir or ""
+        )
+        await related_work_composing(research_field, instance_id, agent_dir or "")
+        await experiments_composing(research_field, instance_id, agent_dir or "")
         await introduction_composing(research_field, instance_id)
         await conclusion_composing(research_field, instance_id)
         await abstract_composing(research_field, instance_id)
@@ -94,5 +86,11 @@ if __name__ == "__main__":
     parser.add_argument("--model_dir", type=str, default=None)
     args = parser.parse_args()
     asyncio.run(
-        writing(args.research_field, args.instance_id, args.agent_dir, args.model_dir)
+        writing(
+            args.research_field,
+            args.instance_id,
+            args.local_root,
+            args.agent_dir,
+            args.model_dir,
+        )
     )
