@@ -2,14 +2,21 @@ from typing import List
 import json
 
 from research_agent.inno.types import Agent, Result
-from research_agent.inno.registry import register_agent, get_tools  # ← 레지스트리 API 사용
+from research_agent.inno.registry import (
+    register_agent,
+    get_tools,
+)  # ← 레지스트리 API 사용
 from research_agent.inno.environment.docker_env import DockerEnv
-from research_agent.inno.environment.docker_env import with_env as with_env_docker  # ← env 주입 래퍼
+from research_agent.inno.environment.docker_env import (
+    with_env as with_env_docker,
+)  # ← env 주입 래퍼
 
 
-def case_resolved(reference_codebases: List[str],
-                  reference_paths: List[str],
-                  reference_papers: List[str]):
+def case_resolved(
+    reference_codebases: List[str],
+    reference_paths: List[str],
+    reference_papers: List[str],
+):
     """
     The function to output the determined reference codebases. Use this function only after you have
     carefully reviewed the existing resources and understand the task.
@@ -22,7 +29,7 @@ def case_resolved(reference_codebases: List[str],
     prepare_result = {
         "reference_codebases": reference_codebases,
         "reference_paths": reference_paths,
-        "reference_papers": reference_papers
+        "reference_papers": reference_papers,
     }
 
     return Result(
@@ -30,7 +37,7 @@ def case_resolved(reference_codebases: List[str],
 I have determined the reference codebases and paths according to the existing resources and the innovative ideas.
 {json.dumps(prepare_result, ensure_ascii=False, indent=4)}
 """,
-        context_variables={"prepare_result": prepare_result}
+        context_variables={"prepare_result": prepare_result},
     )
 
 
@@ -63,7 +70,7 @@ During the decision process, you can use the following tools:
 
 4. You can use `terminal_page_down`, `terminal_page_up` and `terminal_page_to` to scroll the terminal output when it is too long. You can use `terminal_page_to` to move the viewport to the specific page of terminal where the meaningful content is, for example, when the terminal output contains a progress bar or output of generating directory structure when there are many datasets in the directory, you can use `terminal_page_to` to move the viewport to the end of terminal where the meaningful content is.
 
-4. Finally, you should use the function `case_resolved` to output the determined reference codebases.
+5. Finally, you should use the function `case_resolved` to output the determined reference codebases.
       """
 
     # 레지스트리에서 이름으로 도구를 조회하고,
@@ -76,7 +83,9 @@ During the decision process, you can use the following tools:
         "terminal_page_up",
         "terminal_page_to",
     ]
-    tools = get_tools(tool_names, env=code_env, env_wrapper=with_env_docker)  # 안전 조회/주입
+    tools = get_tools(
+        tool_names, env=code_env, env_wrapper=with_env_docker
+    )  # 안전 조회/주입
     # 로컬 함수(case_resolved)는 레지스트리 외부 정의이므로 직접 추가
     tools.append(case_resolved)
 

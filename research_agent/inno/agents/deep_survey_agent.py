@@ -1,5 +1,5 @@
 import json
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 
 from research_agent.inno.tools.file_surfer_tool import with_env as with_env_file
 from research_agent.inno.environment.markdown_browser import RequestsMarkdownBrowser
@@ -11,21 +11,19 @@ from research_agent.inno.registry import (
 )
 
 
-
 def case_resolved(
-    context_variables,
+    context_variables: dict,
     fully_correct: bool,
     suggestion: Optional[Dict[str, str]] = None,
-):
+) -> str:
     """
     Use this function when you have finished the task.
-    You can only use this function after you have checked the results.
 
     Args:
-       fully_correct: whether the implementation/response is fully correct. If not, provide suggestions.
-       suggestion: dict {key_point: suggestion}. If fully_correct, set to None.
+       fully_correct: whether the implementation/response is fully correct
+       suggestion: dict {key_point: suggestion}. If fully_correct, set to None
     """
-    suggestion_dict = {
+    suggestion_dict: Dict[str, Any] = {
         "fully_correct": fully_correct,
     }
 
@@ -33,93 +31,83 @@ def case_resolved(
         suggestion_dict["suggestion"] = suggestion
 
     context_variables["suggestion_dict"] = suggestion_dict
-    ret_val = f"""\
-Here is the suggestion about the review:
-Whether the result is fully correct: {fully_correct}
-The suggestion about the review:
-{json.dumps(suggestion_dict, indent=4)}
-"""
-    return ret_val
 
-@register_agent("get_deep_survey_agent")
-def get_deep_survey_agent(model: str, **kwargs):
-    file_env: RequestsMarkdownBrowser = kwargs.get("file_env", None)
-    assert file_env is not None, "file_env is required"
+    status = "completed" if fully_correct else "needs_revision"
+    suggestion_msg = (
+        f"\nSuggestions: {json.dumps(suggestion, indent=2)}" if suggestion else ""
+    )
 
-    def instructions(context_variables):
-        return f"""\
-You are a `Deep Survey Agent` specialized in comprehensive research with verification. Your task is to research a given topic thoroughly, verify the findings, and correct any errors through iterative refinement.
+    return f"Research {status}. Correct: {fully_correct}{suggestion_msg}"
 
-OBJECTIVE:
+
+DEEP_SURVEY_AGENT_INSTRUCTIONS = """You are a `Deep Survey Agent` specialized in comprehensive research with verification.
+
+## OBJECTIVE
 - Perform deep research on the given topic using multiple sources
 - Verify research findings for accuracy, completeness, and relevance
 - Iteratively fix any issues found during verification
 - Provide a comprehensive and accurate research summary
 
-AVAILABLE TOOLS:
-1. BioMCP Tools (for biomedical research):
-   - `biomcp_article_search`: Search biomedical articles
-   - `biomcp_article_get`: Get article details by PubMed ID
-   - `biomcp_trial_search`: Search clinical trials
-   - `biomcp_trial_get`: Get trial details by NCT ID
-   - `biomcp_gene_search`: Search gene information
-   - `biomcp_gene_get`: Get gene details
-   - `biomcp_drug_search`: Search drug information
-   - `biomcp_drug_get`: Get drug details
-   - `biomcp_disease_search`: Search disease information
-   - `biomcp_disease_get`: Get disease details
-   - `biomcp_variant_search`: Search genetic variants
-   - `biomcp_variant_get`: Get variant details
-   - `biomcp_pathway_search`: Search pathways
-   - `biomcp_pathway_get`: Get pathway details
-   - `biomcp_protein_search`: Search proteins
-   - `biomcp_protein_get`: Get protein details
-   - `biomcp_adverse_event_search`: Search adverse events
-   - `biomcp_adverse_event_get`: Get adverse event details
-   - `biomcp_pgx_search`: Search pharmacogenomics
-   - `biomcp_pgx_get`: Get pharmacogenomics details
-   - `biomcp_gwas_search`: Search GWAS
-   - `biomcp_phenotype_search`: Search phenotypes
-   - `biomcp_gene_enrich`: Gene-set enrichment analysis
+## AVAILABLE TOOLS
 
- 2. OpenAlex Search (for academic literature):
-    - `openalex_search_papers`: Search academic papers (RECOMMENDED for simple searches)
-      Parameters: query, year_from, year_to, primary_source, max_results
-    - `openalex_search`: Advanced search with filters
-      Parameters: query, filter (e.g., "publication_year:>=2020"), per_page, page, max_items, sort
+### 1. BioMCP Tools (Biomedical Research)
+- `biomcp_article_search`: Search biomedical articles
+- `biomcp_article_get`: Get article details by PubMed ID
+- `biomcp_trial_search`: Search clinical trials
+- `biomcp_trial_get`: Get trial details by NCT ID
+- `biomcp_gene_search` / `biomcp_gene_get`: Gene information
+- `biomcp_drug_search` / `biomcp_drug_get`: Drug information
+- `biomcp_disease_search` / `biomcp_disease_get`: Disease information
+- `biomcp_variant_search` / `biomcp_variant_get`: Genetic variants
+- `biomcp_pathway_search` / `biomcp_pathway_get`: Pathways
+- `biomcp_protein_search` / `biomcp_protein_get`: Proteins
+- `biomcp_adverse_event_search` / `biomcp_adverse_event_get`: Adverse events
+- `biomcp_pgx_search` / `biomcp_pgx_get`: Pharmacogenomics
+- `biomcp_gwas_search`: GWAS studies
+- `biomcp_phenotype_search`: Phenotypes
+- `biomcp_gene_enrich`: Gene-set enrichment analysis
 
- 3. Web Search:
-    - `ddg_search`: DuckDuckGo web search for general information
+### 2. OpenAlex Search (Academic Literature)
+- `openalex_search_papers`: Search papers (query, year_from, year_to, max_results)
+- `openalex_search`: Advanced search with filters
 
-4. Analysis:
-   - `llm_analyze`: Use LLM to analyze and synthesize research results
+### 3. Web Search
+- `ddg_search`: DuckDuckGo web search
 
-WORKFLOW:
-1. Analyze the research topic to identify key entities (genes, drugs, diseases, keywords)
-2. Run searches across multiple sources:
-   - BioMCP for biomedical data
-   - OpenAlex for academic papers
-   - DuckDuckGo for web information
-3. Synthesize findings into a comprehensive summary
-4. Verify the research:
-   - Check accuracy of factual claims
-   - Verify completeness (companies, products, development stages, clinical trials)
-   - Ensure relevance to the original topic
-5. If issues found, iterate and fix up to 3 times
-6. Return the final verified research summary
+### 4. Analysis
+- `llm_analyze`: Analyze and synthesize research results
 
-VERIFICATION CRITERIA:
+## WORKFLOW
+
+1. **Analyze** the topic to identify key entities
+2. **Search** across BioMCP, OpenAlex, and DuckDuckGo
+3. **Synthesize** findings into comprehensive summary
+4. **Verify** accuracy, completeness, and relevance
+5. **Iterate** and fix issues (up to 3 times)
+6. **Return** final verified research summary
+
+## VERIFICATION CRITERIA
 - Accuracy: Are factual claims supported by sources?
-- Completeness: Are all important aspects covered?
-- Relevance: Does it directly address the research topic?
+- Completeness: All important aspects covered?
+- Relevance: Does it address the research topic?
 
-IMPORTANT:
-- Be thorough in searching multiple sources
-- Verify and fix issues iteratively
+## IMPORTANT
+- Use exact topic terms in searches (e.g., "IL1RAP ADC" not just "ADC")
+- Search without year limits for latest information
 - Provide comprehensive results with sources
 
-When finished, provide the final verified research summary.
-"""
+When finished, call `case_resolved` with:
+- `fully_correct`: True if satisfactory, False otherwise
+- `suggestion`: Dict of improvements if not fully correct"""
+
+
+@register_agent("get_deep_survey_agent")
+def get_deep_survey_agent(model: str, **kwargs) -> Agent:
+    file_env = kwargs.get("file_env")
+    if file_env is None:
+        raise ValueError("file_env is required")
+
+    file_env: RequestsMarkdownBrowser = file_env
 
     tool_names = [
         "biomcp_article_search",
@@ -154,7 +142,7 @@ When finished, provide the final verified research summary.
     agent = Agent(
         name="Deep Survey Agent",
         model=model,
-        instructions=instructions,
+        instructions=DEEP_SURVEY_AGENT_INSTRUCTIONS,
         functions=tools + [case_resolved],
         tool_choice="required",
     )

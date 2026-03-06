@@ -24,7 +24,7 @@ bootstrap_registry()
 class DeepResearchFlow(FlowModule):
     def __init__(
         self,
-        cache_path: str = None,
+        cache_path: Optional[str] = None,
         log_path: Union[str, None, MetaChainLogger] = None,
         model: str = "gpt-4o-2024-08-06",
         file_env: Optional[RequestsMarkdownBrowser] = None,
@@ -40,7 +40,6 @@ class DeepResearchFlow(FlowModule):
             cache_path,
         )
 
-        # BiomCP and OpenAlex tools for paper search
         biomcp_article_search = get_tool("biomcp_article_search")
         biomcp_trial_search = get_tool("biomcp_trial_search")
         openalex_search_papers = get_tool("openalex_search_papers")
@@ -49,33 +48,40 @@ class DeepResearchFlow(FlowModule):
             """Search papers using BioMCP and OpenAlex"""
             results = []
 
-            # Search BioMCP articles
             try:
                 biomcp_result = biomcp_article_search(keyword=query, limit=10)
                 if biomcp_result:
                     results.append(
                         f"=== BioMCP Article Search: {query} ===\n{biomcp_result}"
                     )
+                else:
+                    results.append(
+                        f"BioMCP article search: No results found for '{query}'"
+                    )
             except Exception as e:
                 results.append(f"BioMCP article search failed: {e}")
 
-            # Search BioMCP trials
             try:
                 biomcp_trial_result = biomcp_trial_search(condition=query, limit=5)
                 if biomcp_trial_result:
                     results.append(
                         f"=== BioMCP Trial Search: {query} ===\n{biomcp_trial_result}"
                     )
+                else:
+                    results.append(
+                        f"BioMCP trial search: No results found for '{query}'"
+                    )
             except Exception as e:
                 results.append(f"BioMCP trial search failed: {e}")
 
-            # Search OpenAlex
             try:
                 openalex_result = openalex_search_papers(query=query, max_results=10)
                 if openalex_result:
                     results.append(
                         f"=== OpenAlex Search: {query} ===\n{openalex_result}"
                     )
+                else:
+                    results.append(f"OpenAlex search: No results found for '{query}'")
             except Exception as e:
                 results.append(f"OpenAlex search failed: {e}")
 
@@ -85,7 +91,7 @@ class DeepResearchFlow(FlowModule):
 
     async def forward(
         self,
-        topic: str = None,
+        topic: Optional[str] = None,
         max_iter_times: int = 1,
         *args,
         **kwargs,
@@ -143,10 +149,11 @@ Then provide the final research summary."""
 
             # suggestion 추출 - fully_correct가 false면 suggestion을 다음 iteration에 전달
             suggestion_dict = context_variables.get("suggestion_dict", {})
-            if suggestion_dict.get("fully_correct", False):
+            fully_correct = suggestion_dict.get("fully_correct", True)
+
+            if fully_correct:
                 break
 
-            # suggestion이 있으면 추출하여 다음 iteration에 전달
             suggestion_text = suggestion_dict.get("suggestion", "")
 
         # After survey is complete, search for related papers using BioMCP and OpenAlex

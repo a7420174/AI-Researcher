@@ -7,13 +7,10 @@ from research_agent.inno.environment.docker_env import DockerConfig, DockerEnv
 from research_agent.inno.types import Agent, Result
 
 from research_agent.inno.registry import (
-    register_agent,  # 에이전트 팩토리 등록
-    get_tools,  # 툴 이름 목록 → (env 자동 주입) 함수 리스트
-    get_agent_factory,  # 다른 에이전트 팩토리 조회
+    register_agent,
+    get_tools,
+    get_agent_factory,
 )
-
-from research_agent.inno.tools import biomcp_tools
-from research_agent.inno.tools import openalex_tools  # OpenAlex tools
 
 
 # --------------------------------------------------------------------

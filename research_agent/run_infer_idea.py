@@ -14,7 +14,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import global_state
 
 from research_agent.inno.workflow.flowcache import FlowModule, ToolModule, AgentModule
-from research_agent.inno import MetaChain
 from research_agent.constant import DOCKER_WORKPLACE_NAME, COMPLETION_MODEL, CHEEP_MODEL
 from research_agent.inno.util import single_select_menu, extract_json_from_output
 from research_agent.inno.environment.docker_env import DockerEnv, DockerConfig
@@ -183,12 +182,12 @@ class InnoFlow(FlowModule):
 
     async def forward(
         self,
-        local_root: str = None,
-        workplace_name: str = None,
+        local_root: Optional[str] = None,
+        workplace_name: Optional[str] = None,
         max_iter_times: int = 0,
-        references: str = None,
-        source_papers: str = None,
-        task_instructions: str = None,
+        references: Optional[str] = None,
+        source_papers: Optional[str] = None,
+        task_instructions: Optional[str] = None,
         *args,
         **kwargs,
     ):

@@ -2,18 +2,25 @@ from typing import Dict, Any
 import json
 
 from research_agent.inno.types import Agent
-from research_agent.inno.registry import register_agent, get_tools  # ← 레지스트리 API만 사용
+from research_agent.inno.registry import (
+    register_agent,
+    get_tools,
+)  # ← 레지스트리 API만 사용
 from research_agent.inno.environment.docker_env import DockerEnv
-from research_agent.inno.environment.docker_env import with_env as with_env_docker  # ← env 주입 래퍼
+from research_agent.inno.environment.docker_env import (
+    with_env as with_env_docker,
+)  # ← env 주입 래퍼
+
 
 def case_resolved(task_response):
     """
-    The task response is the result of the task. Use this function only after you have successfully completed the task. 
+    The task response is the result of the task. Use this function only after you have successfully completed the task.
 
     Args:
         task_response: The result of the task.
     """
     return task_response
+
 
 def case_not_resolved(failure_reason):
     """
@@ -24,6 +31,7 @@ def case_not_resolved(failure_reason):
        failure_reason: The reason why you cannot find a solution to the task.
     """
     return failure_reason
+
 
 @register_agent("get_ml_agent")
 def get_ml_agent(model: str, **kwargs):
@@ -88,7 +96,7 @@ Remember: Your goal is to create a well-organized, self-contained project that:
 2. Uses the EXACT datasets from the plan (no toy data)
 3. Thoughtfully incorporates ideas from reference implementations
 4. Maintains its own coherent structure
-5. You should intergrate ALL acacdemic definition and their code implementation into the project.
+5. You should integrate ALL academic definition and their code implementation into the project.
 """
 
     # 레지스트리에서 이름으로 도구를 일괄 조회하고,
@@ -106,7 +114,9 @@ Remember: Your goal is to create a well-organized, self-contained project that:
         "terminal_page_up",
         "terminal_page_to",
     ]
-    tools = get_tools(tool_names, env=code_env, env_wrapper=with_env_docker)  # ← 안전 조회/주입 [1](https://amcsciences-my.sharepoint.com/personal/a7420174_amcsciences_com/Documents/Microsoft%20Copilot%20Chat%20%ED%8C%8C%EC%9D%BC/registry.py)
+    tools = get_tools(
+        tool_names, env=code_env, env_wrapper=with_env_docker
+    )  # ← 안전 조회/주입 [1](https://amcsciences-my.sharepoint.com/personal/a7420174_amcsciences_com/Documents/Microsoft%20Copilot%20Chat%20%ED%8C%8C%EC%9D%BC/registry.py)
 
     # 레지스트리에 없는 로컬 함수(case_resolved/not_resolved)는 직접 추가
     tools.extend([case_resolved, case_not_resolved])

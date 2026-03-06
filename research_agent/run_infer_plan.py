@@ -158,8 +158,10 @@ class InnoFlow(FlowModule):
                 biomcp_result = biomcp_article_search(keyword=query, limit=limit)
                 if biomcp_result:
                     results.append(
-                        f"=== BioMCP Search Results for '{query}' ===\n biomcp_result"
+                        f"=== BioMCP Search Results for '{query}' ===\n{biomcp_result}"
                     )
+                else:
+                    results.append(f"BioMCP search: No results found for '{query}'")
             except Exception as e:
                 results.append(f"BioMCP search failed: {e}")
 
@@ -206,13 +208,13 @@ class InnoFlow(FlowModule):
 
     async def forward(
         self,
-        local_root: str = None,
-        workplace_name: str = None,
+        local_root: Optional[str] = None,
+        workplace_name: Optional[str] = None,
         max_iter_times: int = 0,
-        ideas: str = None,
-        references: str = None,
-        source_papers: str = None,
-        task_instructions: str = None,
+        ideas: Optional[str] = None,
+        references: Optional[str] = None,
+        source_papers: Optional[str] = None,
+        task_instructions: Optional[str] = None,
         *args,
         **kwargs,
     ):

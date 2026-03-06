@@ -4,19 +4,17 @@ from typing import List
 
 from research_agent.inno.types import Agent, Result
 
-# 환경 주입 래퍼와 환경 타입만 유지 (툴 함수 직접 import 없음)
+# 환경 주입 래퍼와 환경 타입만 유지
 from research_agent.inno.tools.file_surfer_tool import with_env as with_env_file
-from research_agent.inno.environment.docker_env import with_env as with_env_docker
-from research_agent.inno.tools.web_tools import with_env as with_env_web  # (옵션) web tool 주입용
 from research_agent.inno.environment.docker_env import DockerEnv
 from research_agent.inno.environment.markdown_browser import RequestsMarkdownBrowser
 
 # 레지스트리 API
 from research_agent.inno.registry import (
-    register_agent,          # 에이전트 팩토리 등록
-    get_tools,               # 툴 이름 목록 → (env 자동 주입) 함수 리스트
-    get_agent_factory,       # 다른 에이전트 팩토리 조회
+    register_agent,
+    get_tools,
 )
+
 
 # --------------------------------------------------------------------
 # 2) Idea Generation Agent  (레지스트리 등록)
@@ -141,7 +139,9 @@ Remember: Your output will guide the implementation phase. Be thorough, innovati
             "google_scholar_search",
             "download_from_pdf_link",
         ]
-        tool_list.extend(get_tools(web_tool_names, env=web_env, env_wrapper=with_env_web))
+        tool_list.extend(
+            get_tools(web_tool_names, env=web_env, env_wrapper=with_env_web)
+        )
 
     return Agent(
         name="Idea Generation Agent",
