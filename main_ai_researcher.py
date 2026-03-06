@@ -349,7 +349,7 @@ def main_ai_researcher(
                 # After research completes, run writing module
                 from paper_agent import writing
 
-                instance_id = project_info.get("instance_id", "query_based")
+                instance_id = project_info.get("instance_id", "reference_based")
                 asyncio.run(
                     writing.writing(
                         research_field,
@@ -372,7 +372,7 @@ def main_ai_researcher(
                 from research_agent import run_deep_research
                 from constant import COMPLETION_MODEL
 
-                result_info = run_deep_research.main(topic=input, reference=reference)
+                result_info = run_deep_research.main(topic=input, max_iter_times=5)
 
                 # Handle both old string return and new dict return
                 if isinstance(result_info, dict):
