@@ -330,39 +330,38 @@ Output the revised methodology section incorporating all these improvements whil
 async def methodology_composing(
     research_field: str,
     instance_id: str,
+    local_root: str,
     agent_dir: str = None,
     model_dir: str = None,
 ):
-    setup_logging(research_field)
+    setup_logging(research_field, local_root)
 
     composer = MethodologyComposer(
         research_field=research_field, structure_iterations=1
     )
 
+    target_folder = os.path.join(
+        local_root, research_field, "target_sections", instance_id
+    )
+
     # Use provided paths or fall back to a path based on research_field
     if agent_dir is None:
         # Try to find agent_dir from the default location
-        # Look in workplace_paper/{research_field}/{instance_id}/
-        import os
-
-        default_base = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".."
-        )
-        proj_dir = os.path.join(
-            default_base, "workplace_paper", research_field, instance_id
-        )
-        if os.path.exists(proj_dir):
-            cache_dirs = [d for d in os.listdir(proj_dir) if d.startswith("cache_")]
+        # Look in {local_root}/{research_field}/{instance_id}/
+        if os.path.exists(target_folder):
+            cache_dirs = [
+                d for d in os.listdir(target_folder) if d.startswith("cache_")
+            ]
             if cache_dirs:
-                agent_dir = os.path.join(proj_dir, cache_dirs[-1], "agents")
-                model_dir = os.path.join(proj_dir, "workplace/project/model/")
+                agent_dir = os.path.join(target_folder, cache_dirs[-1], "agents")
+                model_dir = os.path.join(target_folder, "workplace/project/model/")
             else:
                 logging.warning(
-                    f"No cache directories found in {proj_dir}, agent_dir will be None"
+                    f"No cache directories found in {target_folder}, agent_dir will be None"
                 )
         else:
             logging.warning(
-                f"Project directory {proj_dir} does not exist, agent_dir will be None"
+                f"Project directory {target_folder} does not exist, agent_dir will be None"
             )
 
     try:

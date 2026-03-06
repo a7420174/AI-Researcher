@@ -226,8 +226,10 @@ Output the revised introduction section incorporating all these improvements. Re
         return final_introduction
 
 
-async def introduction_composing(research_field: str, instance_id: str):
-    setup_logging(research_field)
+async def introduction_composing(
+    research_field: str, instance_id: str, local_root: str
+):
+    setup_logging(research_field, local_root)
 
     composer = IntroductionComposer(
         research_field=research_field, structure_iterations=1

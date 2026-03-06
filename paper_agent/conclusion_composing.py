@@ -193,8 +193,8 @@ Output the revised conclusion section incorporating all these improvements. Repl
         return final_conclusion
 
 
-async def conclusion_composing(research_field: str, instance_id: str):
-    setup_logging(research_field)
+async def conclusion_composing(research_field: str, instance_id: str, local_root: str):
+    setup_logging(research_field, local_root)
 
     composer = ConclusionComposer(research_field=research_field, structure_iterations=2)
     # target_paper = 'Heterogeneous Graph Contrastive Learning for Recommendation'

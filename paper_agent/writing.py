@@ -37,22 +37,23 @@ async def writing(
         local_root, research_field, "target_sections", instance_id
     )
 
-    os.environ["PAPER_TARGET_FOLDER"] = target_folder
-    os.environ["PAPER_RESEARCH_FIELD"] = research_field
-
     print(f"[DEBUG] target_folder: {target_folder}", flush=True)
 
     os.makedirs(target_folder, exist_ok=True)
 
     try:
         await methodology_composing(
-            research_field, instance_id, agent_dir or "", model_dir or ""
+            research_field, instance_id, local_root, agent_dir or "", model_dir or ""
         )
-        await related_work_composing(research_field, instance_id, agent_dir or "")
-        await experiments_composing(research_field, instance_id, agent_dir or "")
-        await introduction_composing(research_field, instance_id)
-        await conclusion_composing(research_field, instance_id)
-        await abstract_composing(research_field, instance_id)
+        await related_work_composing(
+            research_field, instance_id, local_root, agent_dir or ""
+        )
+        await experiments_composing(
+            research_field, instance_id, local_root, agent_dir or ""
+        )
+        await introduction_composing(research_field, instance_id, local_root)
+        await conclusion_composing(research_field, instance_id, local_root)
+        await abstract_composing(research_field, instance_id, local_root)
 
         clean_tex_files_in_folder(target_folder)
 
@@ -72,9 +73,7 @@ async def writing(
                 f"Warning: {main_file} not found in {project_directory}, skipping latex compilation"
             )
     finally:
-        # Clean up environment variables
-        os.environ.pop("PAPER_TARGET_FOLDER", None)
-        os.environ.pop("PAPER_RESEARCH_FIELD", None)
+        pass
 
 
 if __name__ == "__main__":

@@ -195,16 +195,12 @@ Output the revised related work section incorporating all these improvements. Re
         return papers_content
 
     async def compose_section(
-        self, agent_dir: str, papers_dir: str, target_paper: str
+        self, agent_dir: str, papers_dir: str, target_paper: str, target_folder: str
     ) -> str:
         # Dynamically get agent files from agent_dir
         agent_files = []
         print(f"[DEBUG] agent_dir: {agent_dir}", flush=True)
         print(f"[DEBUG] target_paper: {target_paper}", flush=True)
-        print(
-            f"[DEBUG] PAPER_TARGET_FOLDER: {os.environ.get('PAPER_TARGET_FOLDER')}",
-            flush=True,
-        )
         if os.path.exists(agent_dir):
             agent_files = [f for f in os.listdir(agent_dir) if f.endswith(".json")]
             agent_files.sort()
@@ -308,16 +304,12 @@ Output the revised related work section incorporating all these improvements. Re
         self.write_temp_log(final_related_work, "post_checklist_related_work")
 
         # Save final output
-        target_folder = os.environ.get("PAPER_TARGET_FOLDER")
-        print(f"[DEBUG] target_folder from env: {target_folder}", flush=True)
         if target_folder:
             output_dir = target_folder
         else:
             output_dir = f"{self.research_field}/target_sections/{self.normalize_title(target_paper)}"
-            print(f"[DEBUG] Using fallback output_dir: {output_dir}", flush=True)
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, "related_work.tex")
-        print(f"[DEBUG] Saving to: {output_path}", flush=True)
 
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(final_related_work)
@@ -329,42 +321,39 @@ Output the revised related work section incorporating all these improvements. Re
 async def related_work_composing(
     research_field: str,
     instance_id: str,
+    local_root: str,
     agent_dir: str = None,
     papers_dir: str = None,
 ):
-    setup_logging(research_field)
+    setup_logging(research_field, local_root)
 
     composer = RelatedWorkComposer(
         research_field=research_field, structure_iterations=1
     )
 
+    target_folder = os.path.join(
+        local_root, research_field, "target_sections", instance_id
+    )
+
     # Try to find proj_dir from the default location
-    import os
-
-    default_base = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".."
-    )
-    proj_dir = os.path.join(
-        default_base, "workplace_paper", research_field, instance_id
-    )
-
-    # Use provided paths or fall back to default
     if agent_dir is None:
-        if os.path.exists(proj_dir):
-            cache_dirs = [d for d in os.listdir(proj_dir) if d.startswith("cache_")]
+        if os.path.exists(target_folder):
+            cache_dirs = [
+                d for d in os.listdir(target_folder) if d.startswith("cache_")
+            ]
             if cache_dirs:
-                agent_dir = os.path.join(proj_dir, cache_dirs[-1], "agents")
+                agent_dir = os.path.join(target_folder, cache_dirs[-1], "agents")
             else:
-                logging.warning(f"No cache directories found in {proj_dir}")
+                logging.warning(f"No cache directories found in {target_folder}")
         else:
-            logging.warning(f"Project directory {proj_dir} does not exist")
+            logging.warning(f"Project directory {target_folder} does not exist")
 
     if papers_dir is None:
-        papers_dir = os.path.join(proj_dir, "workplace", "papers")
+        papers_dir = os.path.join(target_folder, "workplace", "papers")
 
     try:
         related_work = await composer.compose_section(
-            agent_dir, papers_dir, instance_id
+            agent_dir, papers_dir, instance_id, target_folder
         )
         logging.info("Related work composition completed")
     except Exception as e:

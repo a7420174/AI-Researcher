@@ -406,25 +406,22 @@ Output the revised experiments section incorporating all these improvements. Rep
 async def experiments_composing(
     research_field: str,
     instance_id: str,
+    local_root: str,
     agent_dir: str = None,
     proj_dir: str = None,
 ):
-    setup_logging(research_field)
+    setup_logging(research_field, local_root)
 
     composer = ExperimentsComposer(
         research_field=research_field, structure_iterations=1
     )
 
-    if proj_dir is None:
-        # Try to find proj_dir from the default location
-        import os
+    target_folder = os.path.join(
+        local_root, research_field, "target_sections", instance_id
+    )
 
-        default_base = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".."
-        )
-        proj_dir = os.path.join(
-            default_base, "workplace_paper", research_field, instance_id
-        )
+    if proj_dir is None:
+        proj_dir = target_folder
 
     # Use provided paths or fall back to default
     if agent_dir is None:

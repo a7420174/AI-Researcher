@@ -12,17 +12,10 @@ from paper_agent.gpt_client import GPTClient
 from constant import COMPLETION_MODEL
 
 
-def setup_logging(research_field):
-    # Check for environment variable first, then fall back to relative path
-    target_folder = os.environ.get("PAPER_TARGET_FOLDER")
-    if target_folder:
-        # target_folder is like base/research_field/target_sections/instance_id
-        # We need base/research_field for temp and checkpoints
-        parts = target_folder.split("/target_sections/")
-        if len(parts) > 1:
-            base_dir = parts[0]
-        else:
-            base_dir = target_folder
+def setup_logging(research_field, local_root=None):
+    # Check for local_root parameter first, then fall back to relative path
+    if local_root:
+        base_dir = local_root
     else:
         base_dir = research_field
 
@@ -31,11 +24,10 @@ def setup_logging(research_field):
     os.makedirs(f"{base_dir}/methodology_checkpoints", exist_ok=True)
 
 
-def get_output_dir(research_field, target_paper):
+def get_output_dir(research_field, target_paper, local_root=None):
     """Get the output directory for saving sections"""
-    target_folder = os.environ.get("PAPER_TARGET_FOLDER")
-    if target_folder:
-        return target_folder
+    if local_root:
+        return local_root
     return f"{research_field}/target_sections/{SectionComposer(None, '').normalize_title(target_paper)}"
 
     logging.basicConfig(
@@ -71,7 +63,7 @@ class SectionComposer(ABC):
             f"{self.research_field}/temp",
             f"{self.research_field}/target_sections",
             f"{self.research_field}/{self.section_name}_checkpoints",
-            f"{self.research_field}/writing_templates/{self.section_name}",
+            f"paper_agent/writing_templates/{self.section_name}",
             # f"{self.research_field}/target_sections/{self.section_name}"
         ]
         for directory in directories:
@@ -117,7 +109,7 @@ class SectionComposer(ABC):
 
     def get_random_template(self) -> str:
         """Randomly select a writing template from the templates directory"""
-        template_dir = f"{self.research_field}/writing_templates/{self.section_name}"
+        template_dir = f"paper_agent/writing_templates/{self.section_name}"
         template_files = [
             f for f in os.listdir(template_dir) if f.endswith("_template.txt")
         ]

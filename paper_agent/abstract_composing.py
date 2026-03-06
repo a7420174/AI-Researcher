@@ -210,8 +210,8 @@ Output the revised abstract section incorporating all these improvements. Reply 
         return final_abstract
 
 
-async def abstract_composing(research_field: str, instance_id: str):
-    setup_logging(research_field)
+async def abstract_composing(research_field: str, instance_id: str, local_root: str):
+    setup_logging(research_field, local_root)
 
     composer = AbstractComposer(research_field=research_field, structure_iterations=2)
     # target_paper = 'Heterogeneous Graph Contrastive Learning for Recommendation'
