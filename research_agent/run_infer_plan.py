@@ -276,7 +276,7 @@ And a list of papers for your reference:
 
 I have carefully gone through these papers' github repositories and found download some of them in my local machine, with the following information:
 {prepare_res}
-And I have also downloaded the corresponding paper in the Tex format, with the following information:
+And I have also searched for relevant papers using biomedical databases (BioMCP and OpenAlex), with the following information:
 {download_res}
 
 Your task is to do a comprehensive survey on the innovative ideas and the papers, and give me a detailed plan for the implementation.

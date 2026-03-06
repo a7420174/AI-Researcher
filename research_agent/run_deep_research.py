@@ -5,10 +5,11 @@ This module uses the Deep Survey Agent for comprehensive research with verificat
 
 import os
 import asyncio
+import json
 from typing import Dict, Any, List, Union, Optional
 from dotenv import load_dotenv
 
-from research_agent.inno.workflow.flowcache import FlowModule, AgentModule
+from research_agent.inno.workflow.flowcache import FlowModule, AgentModule, ToolModule
 from research_agent.inno.registry import get_agent_factory, get_tool
 from research_agent.constant import COMPLETION_MODEL, CHEEP_MODEL
 from research_agent.inno.environment.markdown_browser import RequestsMarkdownBrowser
@@ -39,6 +40,49 @@ class DeepResearchFlow(FlowModule):
             cache_path,
         )
 
+        # BiomCP and OpenAlex tools for paper search
+        biomcp_article_search = get_tool("biomcp_article_search")
+        biomcp_trial_search = get_tool("biomcp_trial_search")
+        openalex_search_papers = get_tool("openalex_search_papers")
+
+        def search_papers_tool(query: str) -> str:
+            """Search papers using BioMCP and OpenAlex"""
+            results = []
+
+            # Search BioMCP articles
+            try:
+                biomcp_result = biomcp_article_search(keyword=query, limit=10)
+                if biomcp_result:
+                    results.append(
+                        f"=== BioMCP Article Search: {query} ===\n{biomcp_result}"
+                    )
+            except Exception as e:
+                results.append(f"BioMCP article search failed: {e}")
+
+            # Search BioMCP trials
+            try:
+                biomcp_trial_result = biomcp_trial_search(condition=query, limit=5)
+                if biomcp_trial_result:
+                    results.append(
+                        f"=== BioMCP Trial Search: {query} ===\n{biomcp_trial_result}"
+                    )
+            except Exception as e:
+                results.append(f"BioMCP trial search failed: {e}")
+
+            # Search OpenAlex
+            try:
+                openalex_result = openalex_search_papers(query=query, max_results=10)
+                if openalex_result:
+                    results.append(
+                        f"=== OpenAlex Search: {query} ===\n{openalex_result}"
+                    )
+            except Exception as e:
+                results.append(f"OpenAlex search failed: {e}")
+
+            return "\n\n".join(results) if results else "No paper search results found."
+
+        self.search_papers = ToolModule(search_papers_tool, cache_path)
+
     async def forward(
         self,
         topic: str = None,
@@ -53,7 +97,11 @@ class DeepResearchFlow(FlowModule):
         suggestion_text = ""
         for i in range(MAX_ITER_TIMES):
             # 이전 iteration의 suggestion을 현재 프롬프트에 포함
-            suggestion_prefix = f"\n\nPrevious iteration suggestions:\n{suggestion_text}\n\nPlease address these suggestions in your research.\n" if suggestion_text else ""
+            suggestion_prefix = (
+                f"\n\nPrevious iteration suggestions:\n{suggestion_text}\n\nPlease address these suggestions in your research.\n"
+                if suggestion_text
+                else ""
+            )
             research_prompt = f"""Please perform comprehensive research on the following topic:
 
 Topic: {topic}{suggestion_prefix}
@@ -92,23 +140,25 @@ Then provide the final research summary."""
             )
             survey_res = survey_messages[-1]["content"]
             context_variables["model_survey"] = survey_res
-            
+
             # suggestion 추출 - fully_correct가 false면 suggestion을 다음 iteration에 전달
             suggestion_dict = context_variables.get("suggestion_dict", {})
             if suggestion_dict.get("fully_correct", False):
                 break
-            
+
             # suggestion이 있으면 추출하여 다음 iteration에 전달
             suggestion_text = suggestion_dict.get("suggestion", "")
 
+        # After survey is complete, search for related papers using BioMCP and OpenAlex
+        related_papers_search = self.search_papers({"query": topic})
+
         return {
             "survey_result": survey_res,
+            "related_papers_search": related_papers_search,
         }
 
 
-def main(
-    topic: str, max_iter_times: int = 1
-):
+def main(topic: str, max_iter_times: int = 1):
     """
     Main entry point for Deep Research using Agent.
 
@@ -153,10 +203,12 @@ def main(
         model=COMPLETION_MODEL,
     )
 
-    result = asyncio.run(flow(
-        topic=topic,
-        max_iter_times=max_iter_times,
-    ))
+    result = asyncio.run(
+        flow(
+            topic=topic,
+            max_iter_times=max_iter_times,
+        )
+    )
 
     workplace_name = "workplace"
     agent_dir = os.path.join(local_root, workplace_name)
@@ -168,6 +220,16 @@ def main(
     with open(os.path.join(agent_dir, "research_result.md"), "w") as f:
         f.write(f"# Research Topic: {topic}\n\n")
         f.write(result.get("survey_result", ""))
+
+    # Save related papers search results to JSON for paper_agent
+    related_papers_data = {
+        "topic": topic,
+        "search_results": result.get("related_papers_search", ""),
+    }
+    with open(
+        os.path.join(agent_dir, "related_papers.json"), "w", encoding="utf-8"
+    ) as f:
+        json.dump(related_papers_data, f, ensure_ascii=False, indent=2)
 
     return {
         "result": result.get("survey_result", ""),
@@ -186,7 +248,6 @@ if __name__ == "__main__":
         "--topic", type=str, required=True, help="Research topic/question"
     )
     parser.add_argument("--max-iter-times", type=int, default=5)
-
 
     args = parser.parse_args()
 

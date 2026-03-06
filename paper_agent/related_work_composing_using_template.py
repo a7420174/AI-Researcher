@@ -153,21 +153,45 @@ Output the revised related work section incorporating all these improvements. Re
 
         return await self.gpt_client.chat(prompt=prompt)
 
-    def read_related_papers(self, papers_dir):
-        """Read all related papers from the papers directory"""
+    def read_related_papers(self, papers_dir, agent_dir=None):
+        """Read all related papers from the papers directory or related_papers.json"""
         papers_content = []
-        for filename in os.listdir(papers_dir):
-            if filename.endswith(".txt") or filename.endswith(".json"):
+
+        # First, try to read from related_papers.json in agent_dir
+        if agent_dir:
+            related_papers_file = os.path.join(agent_dir, "related_papers.json")
+            if os.path.exists(related_papers_file):
                 try:
-                    with open(
-                        os.path.join(papers_dir, filename), "r", encoding="utf-8"
-                    ) as f:
-                        content = f.read()
+                    with open(related_papers_file, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        search_results = data.get("search_results", "")
                         papers_content.append(
-                            {"filename": filename, "content": content}
+                            {
+                                "filename": "related_papers.json",
+                                "content": search_results,
+                                "topic": data.get("topic", ""),
+                            }
+                        )
+                        logging.info(
+                            f"Found related papers from biomcp/openalex search"
                         )
                 except Exception as e:
-                    logging.error(f"Error reading paper file {filename}: {str(e)}")
+                    logging.error(f"Error reading related_papers.json: {str(e)}")
+
+        # Then, also try to read from papers_dir if it exists
+        if papers_dir and os.path.exists(papers_dir):
+            for filename in os.listdir(papers_dir):
+                if filename.endswith(".txt") or filename.endswith(".json"):
+                    try:
+                        with open(
+                            os.path.join(papers_dir, filename), "r", encoding="utf-8"
+                        ) as f:
+                            content = f.read()
+                            papers_content.append(
+                                {"filename": filename, "content": content}
+                            )
+                    except Exception as e:
+                        logging.error(f"Error reading paper file {filename}: {str(e)}")
         return papers_content
 
     async def compose_section(
@@ -193,13 +217,9 @@ Output the revised related work section incorporating all these improvements. Re
 
         logging.info(f"Found {len(agent_files)} agent files: {agent_files}")
 
-        # Read related papers
-        related_papers = []
-        if papers_dir and os.path.exists(papers_dir):
-            related_papers = self.read_related_papers(papers_dir)
-            logging.info(f"Found {len(related_papers)} related papers in {papers_dir}")
-        else:
-            logging.warning(f"Papers directory not found: {papers_dir}")
+        # Read related papers from biomcp/openalex search results (agent_dir) or papers directory
+        related_papers = self.read_related_papers(papers_dir, agent_dir)
+        logging.info(f"Found {len(related_papers)} related papers")
 
         # Step 1: Iterative structure generation
         structure = ""
