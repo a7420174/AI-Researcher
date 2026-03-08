@@ -74,21 +74,25 @@ DEEP_SURVEY_AGENT_INSTRUCTIONS = """You are a `Deep Survey Agent` specialized in
 ### 3. Web Search
 - `ddg_search`: DuckDuckGo web search
 
-### 4. Analysis
-- `llm_analyze`: Analyze and synthesize research results
+### 4. Citation Formatting
+- `citation_format`: Format citations consistently
+- `citation_add`: Add a single citation
+- `citation_clear`: Clear all citations
+- `citation_get`: Get all stored citations
 
 ## WORKFLOW
 
 1. **Analyze** the topic to identify key entities
 2. **First, search for related papers** using BioMCP (`biomcp_article_search`) and OpenAlex (`openalex_search_papers`) - these will be your PRIMARY sources for citations
-3. **Then search** other relevant information using BioMCP and DuckDuckGo
+3. **Then search** other relevant information using other BioMCP tools and DuckDuckGo
 4. **Synthesize** findings into comprehensive summary using the related papers as your main citation sources
-5. **Verify** accuracy, completeness, and relevance
-6. **Iterate** and fix issues
-7. **Return** final verified research summary
+5. **Format citations** using `citation_format` tool to store formatted citations in `context_variables['citations']`
+6. **Verify** accuracy, completeness, and relevance
+7. **Iterate** and fix issues
+8. **Return** final verified research summary
 
 ## CITATION REQUIREMENTS
-- Use papers found in step 2 (related papers search) as PRIMARY citation sources
+- Use papers found in step 2 as PRIMARY citation sources
 - Include paper titles, authors, year, and source (PubMed/OpenAlex) in your citations
 - Format citations consistently (e.g., [Paper Title, Year, Source])
 
@@ -100,7 +104,7 @@ DEEP_SURVEY_AGENT_INSTRUCTIONS = """You are a `Deep Survey Agent` specialized in
 ## IMPORTANT
 - Use exact topic terms in searches (e.g., "IL1RAP ADC" not just "ADC")
 - Search without year limits for latest information
-- Always cite your sources using papers from the related papers search
+- Always cite your sources using papers from step 2 and 3 
 
 When finished, call `case_resolved` with:
 - `fully_correct`: True if satisfactory, False otherwise
@@ -142,6 +146,10 @@ def get_deep_survey_agent(model: str, **kwargs) -> Agent:
         "openalex_search",
         "openalex_search_papers",
         "ddg_search",
+        "citation_format",
+        "citation_add",
+        "citation_clear",
+        "citation_get",
     ]
     tools = get_tools(tool_names, env=file_env, env_wrapper=with_env_file)
 
