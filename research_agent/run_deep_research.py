@@ -101,6 +101,7 @@ class DeepResearchFlow(FlowModule):
         MAX_ITER_TIMES = max_iter_times
         survey_res = ""
         suggestion_text = ""
+
         for i in range(MAX_ITER_TIMES):
             # 이전 iteration의 suggestion을 현재 프롬프트에 포함
             suggestion_prefix = (
@@ -110,34 +111,7 @@ class DeepResearchFlow(FlowModule):
             )
             research_prompt = f"""Please perform comprehensive research on the following topic:
 
-Topic: {topic}{suggestion_prefix}
-
-IMPORTANT SEARCH INSTRUCTIONS:
-1. When searching for drug/trial/article databases, ALWAYS use the EXACT topic terms.
-   - For example, if the topic is "IL1RAP ADC", search for "IL1RAP ADC" specifically,
-     NOT just "ADC" or "IL1RAP" alone.
-   - Use compound search terms like "IL1RAP ADC", "IL1RAP antibody-drug conjugate"
-2. Search WITHOUT year limits to get the latest information (do NOT restrict to 2024)
-
-Research Requirements:
-1. Search and analyze information from BioMCP (biomedical databases) - use EXACT topic terms
-2. Search academic papers from OpenAlex - use EXACT topic terms, no year limits
-3. Search the web for additional information - use EXACT topic terms
-4. Synthesize findings into a comprehensive summary
-
-Please provide:
-- Executive Summary
-- Key findings from biomedical databases
-- Key findings from academic literature
-- Key findings from web searches
-- Clinical trial information
-- Sources and references
-
-After reviewing, use the `case_resolved` function to provide your final verdict:
-- Set `fully_correct` to True if the research is satisfactory
-- If not fully correct, provide suggestions for improvement
-- From the suggestions, verify and fix any issues found.
-Then provide the final research summary."""
+Topic: {topic}{suggestion_prefix}"""
 
             messages = [{"role": "user", "content": research_prompt}]
 
@@ -151,17 +125,14 @@ Then provide the final research summary."""
             suggestion_dict = context_variables.get("suggestion_dict", {})
             fully_correct = suggestion_dict.get("fully_correct", True)
 
-            if fully_correct:
+            if fully_correct and not survey_res:
                 break
 
             suggestion_text = suggestion_dict.get("suggestion", "")
 
-        # After survey is complete, search for related papers using BioMCP and OpenAlex
-        related_papers_search = self.search_papers({"query": topic})
-
         return {
             "survey_result": survey_res,
-            "related_papers_search": related_papers_search,
+            "related_papers_search": context_variables.get("related_papers_search", ""),
         }
 
 
