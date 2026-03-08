@@ -405,10 +405,7 @@ def openalex_search_papers(
         output_lines.append(f"- **Source:** {source}")
         output_lines.append(f"- **DOI:** {doi}")
         if abstract:
-            abstract_preview = (
-                abstract[:500] + "..." if len(abstract) > 500 else abstract
-            )
-            output_lines.append(f"- **Abstract:** {abstract_preview}")
+            output_lines.append(f"- **Abstract:** {abstract}")
         output_lines.append("")
 
     output_lines.append(f"---")
