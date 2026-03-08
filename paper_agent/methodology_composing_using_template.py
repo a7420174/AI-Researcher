@@ -208,7 +208,7 @@ Output the revised methodology section incorporating all these improvements whil
         return await self.gpt_client.chat(prompt=prompt)
 
     async def compose_section(
-        self, agent_dir: str, model_dir: str, target_paper: str
+        self, agent_dir: str, model_dir: str, target_paper: str, target_folder: str
     ) -> str:
         # Dynamically get agent files from agent_dir
         agent_files = []
@@ -312,7 +312,6 @@ Output the revised methodology section incorporating all these improvements whil
         self.write_temp_log(final_methodology, "post_checklist_methodology")
 
         # Save final output
-        target_folder = os.environ.get("PAPER_TARGET_FOLDER")
         if target_folder:
             output_dir = target_folder
         else:
@@ -365,7 +364,9 @@ async def methodology_composing(
             )
 
     try:
-        methodology = await composer.compose_section(agent_dir, model_dir, instance_id)
+        methodology = await composer.compose_section(
+            agent_dir, model_dir, instance_id, target_folder
+        )
         logging.info("Methodology composition completed")
     except Exception as e:
         logging.error(f"Error during methodology composition: {str(e)}")

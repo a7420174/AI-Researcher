@@ -15,9 +15,10 @@ class AbstractComposer(SectionComposer):
     def __init__(self, research_field: str, structure_iterations: int = 2):
         super().__init__(research_field, "abstract", structure_iterations)
 
-    def read_section_content(self, target_paper: str, section_name: str) -> str:
+    def read_section_content(
+        self, target_paper: str, section_name: str, target_folder: str = None
+    ) -> str:
         """Read content from an existing section file"""
-        target_folder = os.environ.get("PAPER_TARGET_FOLDER")
         if target_folder:
             section_path = os.path.join(target_folder, f"{section_name}.tex")
         else:
@@ -149,14 +150,20 @@ Output the revised abstract section incorporating all these improvements. Reply 
 
         return await self.gpt_client.chat(prompt=prompt)
 
-    async def compose_section(self, target_paper: str) -> str:
+    async def compose_section(self, target_paper: str, target_folder: str) -> str:
         checkpoint_dir = self.get_checkpoint_path(target_paper)
         os.makedirs(checkpoint_dir, exist_ok=True)
 
         # Read existing sections
-        introduction = self.read_section_content(target_paper, "introduction")
-        methodology = self.read_section_content(target_paper, "methodology")
-        experiments = self.read_section_content(target_paper, "experiments")
+        introduction = self.read_section_content(
+            target_paper, "introduction", target_folder
+        )
+        methodology = self.read_section_content(
+            target_paper, "methodology", target_folder
+        )
+        experiments = self.read_section_content(
+            target_paper, "experiments", target_folder
+        )
         content_bundle = introduction + "\n\n" + methodology + "\n\n" + experiments
 
         # Step 1: Iterative structure generation
@@ -185,7 +192,6 @@ Output the revised abstract section incorporating all these improvements. Reply 
         self.write_temp_log(final_abstract, "initial_abstract")
 
         # Save final output
-        target_folder = os.environ.get("PAPER_TARGET_FOLDER")
         if target_folder:
             output_dir = target_folder
         else:
@@ -214,10 +220,13 @@ async def abstract_composing(research_field: str, instance_id: str, local_root: 
     setup_logging(research_field, local_root)
 
     composer = AbstractComposer(research_field=research_field, structure_iterations=2)
-    # target_paper = 'Heterogeneous Graph Contrastive Learning for Recommendation'
+
+    target_folder = os.path.join(
+        local_root, research_field, "target_sections", instance_id
+    )
 
     try:
-        abstract = await composer.compose_section(instance_id)
+        abstract = await composer.compose_section(instance_id, target_folder)
         logging.info("Abstract composition completed")
     except Exception as e:
         logging.error(f"Error during abstract composition: {str(e)}")

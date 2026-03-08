@@ -14,9 +14,10 @@ class ConclusionComposer(SectionComposer):
     def __init__(self, research_field: str, structure_iterations: int = 2):
         super().__init__(research_field, "conclusion", structure_iterations)
 
-    def read_section_content(self, target_paper: str, section_name: str) -> str:
+    def read_section_content(
+        self, target_paper: str, section_name: str, target_folder: str = None
+    ) -> str:
         """Read content from an existing section file"""
-        target_folder = os.environ.get("PAPER_TARGET_FOLDER")
         if target_folder:
             section_path = os.path.join(target_folder, f"{section_name}.tex")
         else:
@@ -140,14 +141,20 @@ Output the revised conclusion section incorporating all these improvements. Repl
 
         return await self.gpt_client.chat(prompt=prompt)
 
-    async def compose_section(self, target_paper: str) -> str:
+    async def compose_section(self, target_paper: str, target_folder: str) -> str:
         checkpoint_dir = self.get_checkpoint_path(target_paper)
         os.makedirs(checkpoint_dir, exist_ok=True)
 
         # Read existing sections
-        introduction = self.read_section_content(target_paper, "introduction")
-        methodology = self.read_section_content(target_paper, "methodology")
-        experiments = self.read_section_content(target_paper, "experiments")
+        introduction = self.read_section_content(
+            target_paper, "introduction", target_folder
+        )
+        methodology = self.read_section_content(
+            target_paper, "methodology", target_folder
+        )
+        experiments = self.read_section_content(
+            target_paper, "experiments", target_folder
+        )
         content_bundle = introduction + "\n\n" + methodology + "\n\n" + experiments
 
         # Step 1: Iterative structure generation
@@ -178,7 +185,6 @@ Output the revised conclusion section incorporating all these improvements. Repl
         self.write_temp_log(final_conclusion, "final_conclusion")
 
         # Save final output
-        target_folder = os.environ.get("PAPER_TARGET_FOLDER")
         if target_folder:
             output_dir = target_folder
         else:
@@ -197,10 +203,13 @@ async def conclusion_composing(research_field: str, instance_id: str, local_root
     setup_logging(research_field, local_root)
 
     composer = ConclusionComposer(research_field=research_field, structure_iterations=2)
-    # target_paper = 'Heterogeneous Graph Contrastive Learning for Recommendation'
+
+    target_folder = os.path.join(
+        local_root, research_field, "target_sections", instance_id
+    )
 
     try:
-        conclusion = await composer.compose_section(instance_id)
+        conclusion = await composer.compose_section(instance_id, target_folder)
         logging.info("Conclusion composition completed")
     except Exception as e:
         logging.error(f"Error during conclusion composition: {str(e)}")

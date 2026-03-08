@@ -14,9 +14,10 @@ class IntroductionComposer(SectionComposer):
     def __init__(self, research_field: str, structure_iterations: int = 3):
         super().__init__(research_field, "introduction", structure_iterations)
 
-    def read_section_content(self, target_paper: str, section_name: str) -> str:
+    def read_section_content(
+        self, target_paper: str, section_name: str, target_folder: str = None
+    ) -> str:
         """Read content from an existing section file"""
-        target_folder = os.environ.get("PAPER_TARGET_FOLDER")
         if target_folder:
             section_path = os.path.join(target_folder, f"{section_name}.tex")
         else:
@@ -174,11 +175,17 @@ Output the revised introduction section incorporating all these improvements. Re
 
         return await self.gpt_client.chat(prompt=prompt)
 
-    async def compose_section(self, target_paper: str) -> str:
+    async def compose_section(self, target_paper: str, target_folder: str) -> str:
         # Read existing sections
-        methodology = self.read_section_content(target_paper, "methodology")
-        related_work = self.read_section_content(target_paper, "related_work")
-        experiments = self.read_section_content(target_paper, "experiments")
+        methodology = self.read_section_content(
+            target_paper, "methodology", target_folder
+        )
+        related_work = self.read_section_content(
+            target_paper, "related_work", target_folder
+        )
+        experiments = self.read_section_content(
+            target_paper, "experiments", target_folder
+        )
         content_bundle = methodology + "\n\n" + experiments + "\n\n" + related_work
 
         # Step 1: Iterative structure generation
@@ -208,10 +215,8 @@ Output the revised introduction section incorporating all these improvements. Re
         self.write_temp_log(final_introduction, "final_introduction")
 
         # Save final output
-        # Check for environment variable first, then fall back to relative path
-        target_folder = os.environ.get("PAPER_TARGET_FOLDER")
         if target_folder:
-            output_dir = os.path.join(target_folder)
+            output_dir = target_folder
         else:
             output_dir = f"{self.research_field}/target_sections/{self.normalize_title(target_paper)}"
 
@@ -235,8 +240,12 @@ async def introduction_composing(
         research_field=research_field, structure_iterations=1
     )
 
+    target_folder = os.path.join(
+        local_root, research_field, "target_sections", instance_id
+    )
+
     try:
-        introduction = await composer.compose_section(instance_id)
+        introduction = await composer.compose_section(instance_id, target_folder)
         logging.info("Introduction composition completed")
     except Exception as e:
         logging.error(f"Error during introduction composition: {str(e)}")

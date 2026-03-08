@@ -276,7 +276,7 @@ Output the revised experiments section incorporating all these improvements. Rep
         return await self.gpt_client.chat(prompt=prompt)
 
     async def compose_section(
-        self, agent_dir: str, proj_dir: str, target_paper: str
+        self, agent_dir: str, proj_dir: str, target_paper: str, target_folder: str
     ) -> str:
         # Dynamically get agent files from agent_dir
         agent_files = []
@@ -388,7 +388,6 @@ Output the revised experiments section incorporating all these improvements. Rep
         self.write_temp_log(final_experiments, "post_checklist_experiments")
 
         # Save final output
-        target_folder = os.environ.get("PAPER_TARGET_FOLDER")
         if target_folder:
             output_dir = target_folder
         else:
@@ -435,7 +434,9 @@ async def experiments_composing(
             logging.warning(f"Project directory {proj_dir} does not exist")
 
     try:
-        experiments = await composer.compose_section(agent_dir, proj_dir, instance_id)
+        experiments = await composer.compose_section(
+            agent_dir, proj_dir, instance_id, target_folder
+        )
         logging.info("Experiments composition completed")
     except Exception as e:
         logging.error(f"Error during experiments composition: {str(e)}")
