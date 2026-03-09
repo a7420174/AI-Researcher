@@ -24,7 +24,7 @@ bootstrap_registry()
 class DeepResearchFlow(FlowModule):
     def __init__(
         self,
-        cache_path: Optional[str] = None,
+        cache_path: str,
         log_path: Union[str, None, MetaChainLogger] = None,
         model: str = "gpt-4o-2024-08-06",
         file_env: Optional[RequestsMarkdownBrowser] = None,
@@ -69,11 +69,19 @@ Topic: {topic}{suggestion_prefix}"""
             survey_messages, context_variables = await self.survey_agent(
                 messages, context_variables
             )
-            survey_res = survey_messages[-1]["content"]
+
+            if not survey_messages:
+                continue
+
+            last_msg = survey_messages[-1]
+            survey_res = last_msg.get("content", "")
+
+            if not survey_res:
+                continue
 
             # suggestion 추출 - fully_correct가 false면 suggestion을 다음 iteration에 전달
             suggestion_dict = context_variables.get("suggestion_dict", {})
-            fully_correct = suggestion_dict.get("fully_correct", True)
+            fully_correct = suggestion_dict.get("fully_correct", False)
 
             if fully_correct and survey_res:
                 break

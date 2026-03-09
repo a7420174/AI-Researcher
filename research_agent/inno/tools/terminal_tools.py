@@ -5,9 +5,10 @@ import base64
 import math
 # from metachain.util import run_command_in_container
 from research_agent.inno.environment.docker_env import DockerEnv, DockerConfig
+from research_agent.inno.environment.local_env import LocalEnv
 from research_agent.inno.registry import register_tool
 from research_agent.inno.environment.markdown_browser.requests_markdown_browser import RequestsMarkdownBrowser
-from typing import Tuple, Optional, Dict
+from typing import Tuple, Optional, Dict, Union
 import time
 import tiktoken
 from datetime import datetime
@@ -132,11 +133,12 @@ def process_terminal_response(func):
     return wrapper
 @register_tool("read_file")
 @process_terminal_response
-def read_file(file_path: str, env: DockerEnv) -> str:
+def read_file(file_path: str, env: Union[DockerEnv, LocalEnv]) -> str:
     """
     Read the contents of a file and return it as a string. Use this function when there is a need to check an existing file.
     Args:
         file_path: The path of the file to read.
+        env: The environment (DockerEnv or LocalEnv) to read the file from.
     Returns:
         A string representation of the contents of the file.
     """
@@ -149,7 +151,7 @@ def read_file(file_path: str, env: DockerEnv) -> str:
     except FileNotFoundError:
         return f"Error in reading file: {file_path}"
 
-def write_file_in_chunks(file_content, output_path, env: DockerEnv, chunk_size=100000):
+def write_file_in_chunks(file_content, output_path, env: Union[DockerEnv, LocalEnv], chunk_size=100000):
     encoded_content = base64.b64encode(file_content.encode('utf-8')).decode('utf-8')
     total_chunks = math.ceil(len(encoded_content) / chunk_size)
     
@@ -174,12 +176,13 @@ def write_file_in_chunks(file_content, output_path, env: DockerEnv, chunk_size=1
     return f"File created at: {output_path}"
 
 @register_tool("create_file")
-def create_file(path: str, content: str, env: DockerEnv) -> str:
+def create_file(path: str, content: str, env: Union[DockerEnv, LocalEnv]) -> str:
     """
     Create a file with the given path and content. Use this function when there is a need to create a new file with initial content.
     Args:
         path: The path to the file to create.
         content: The initial content to write to the file.
+        env: The environment (DockerEnv or LocalEnv) to create the file in.
     Returns:
         A string representation of the result of the file creation.
     """
@@ -190,12 +193,13 @@ def create_file(path: str, content: str, env: DockerEnv) -> str:
         return f"Error creating file: {str(e)}"
 
 @register_tool("write_file")
-def write_file(path: str, content: str, env: DockerEnv) -> str:
+def write_file(path: str, content: str, env: Union[DockerEnv, LocalEnv]) -> str:
     """
     Write content to a file. Use this function when there is a need to write content to an existing file.
     Args:
         path: The path to the file to write to.
         content: The content to write to the file.
+        env: The environment (DockerEnv or LocalEnv) to write the file to.
     Returns:
         A string representation of the result of the file writing.
     """
@@ -207,11 +211,12 @@ def write_file(path: str, content: str, env: DockerEnv) -> str:
 
 @register_tool("list_files")
 @process_terminal_response
-def list_files(path: str, env: DockerEnv) -> str:
+def list_files(path: str, env: Union[DockerEnv, LocalEnv]) -> str:
     """
     List all files and directories under the given path if it is a directory. Use this function when there is a need to list the contents of a directory.
     Args:
         path: The file system path to check and list contents from.
+        env: The environment (DockerEnv or LocalEnv) to list files from.
     Returns:
         A string representation of the contents of the directory.
     """
@@ -224,11 +229,12 @@ def list_files(path: str, env: DockerEnv) -> str:
     return response
 
 @register_tool("create_directory")
-def create_directory(path: str, env: DockerEnv) -> str:
+def create_directory(path: str, env: Union[DockerEnv, LocalEnv]) -> str:
     """
     Create a directory if it does not exist. Use this function when there is a need to create a new directory.
     Args:
         path: The path of the directory to create.
+        env: The environment (DockerEnv or LocalEnv) to create the directory in.
     Returns:
         A string representation of the result of the directory creation.
     """
@@ -243,10 +249,11 @@ def create_directory(path: str, env: DockerEnv) -> str:
 
 @register_tool("gen_code_tree_structure")
 @process_terminal_response
-def gen_code_tree_structure(directory: str, env: DockerEnv) -> str:
+def gen_code_tree_structure(directory: str, env: Union[DockerEnv, LocalEnv]) -> str:
     """Generate a tree structure of the code in the specified directory. Use this function when you need to know the overview of the codebase and want to generate a tree structure of the codebase.
     Args:
         directory: The directory to generate the tree structure for.
+        env: The environment (DockerEnv or LocalEnv) to generate the tree structure in.
     Returns:
         A string representation of the tree structure of the code in the specified directory.
     """
@@ -262,11 +269,12 @@ def print_stream(text):
     console.print(f"[grey42]{text}[/grey42]")
 @register_tool("execute_command")
 @process_terminal_response
-def execute_command(command: str, env: DockerEnv) -> str:
+def execute_command(command: str, env: Union[DockerEnv, LocalEnv]) -> str:
     """
     Execute a command in the system shell. Use this function when there is a need to run a system command, and execute programs.
     Args:
         command: The command to execute in the system shell.
+        env: The environment (DockerEnv or LocalEnv) to execute the command in.
     Returns:
         A string representation of the exit code and output of the command.
     """
@@ -288,7 +296,7 @@ def set_doc(doc_template):
 @register_tool("run_python")
 @process_terminal_response
 def run_python(
-    env: DockerEnv,
+    env: Union[DockerEnv, LocalEnv],
     code_path: str,
     cwd: str = None,
     env_vars: Optional[Dict[str, str]] = None,
@@ -296,6 +304,7 @@ def run_python(
     """
     Run a python script. 
     Args:
+        env: The environment (DockerEnv or LocalEnv) to run the python script in.
         code_path: The absolute or relative path (the relative path is from the root of the workplace `/workplace`) to the python script file.
         cwd: The working directory of the python script. If not provided, will regard the directory of the script as the working directory. If there is a command `cd ...` in the instruction for running the script, you should provide the cwd and not use the default value. (Optional)
         env_vars: The environment variables to be set before running the python script. (Optional)
