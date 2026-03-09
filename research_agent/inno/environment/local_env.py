@@ -147,6 +147,115 @@ class LocalEnv:
         except Exception as e:
             return {"status": -1, "result": f"Error running command: {str(e)}"}
 
+    def run_command(
+        self,
+        command: str,
+        stream_callback: Any = None,
+        recv_timeout: Optional[float] = 5.0,
+        run_as_os: bool = False,
+    ) -> Dict[str, Any]:
+        timeout = int(recv_timeout * 60) if recv_timeout else 300
+
+        if run_as_os:
+            return self.run_os_command(command, stream_callback, recv_timeout)
+
+        if self.use_uv:
+            if self._check_command(self.uv_path):
+                if self.venv_path and os.path.exists(self.venv_path):
+                    full_command = f"cd {self.local_workplace} && {self.uv_path} run --python {self.venv_path}/bin/python {command}"
+                else:
+                    full_command = f"cd {self.local_workplace} && {self.uv_path} run python {command}"
+            else:
+                full_command = f"cd {self.local_workplace} && {command}"
+        else:
+            activate_conda = f"source {self.conda_path}/etc/profile.d/conda.sh 2>/dev/null || true; conda activate autogpt 2>/dev/null || true"
+            full_command = f"cd {self.local_workplace} && {activate_conda} && {command}"
+
+        process = None
+        try:
+            process = subprocess.Popen(
+                ["/bin/bash", "-c", full_command],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                cwd=self.local_workplace,
+            )
+
+            output_lines = []
+            while True:
+                line = process.stdout.readline()
+                if not line and process.poll() is not None:
+                    break
+                if line:
+                    output_lines.append(line)
+                    if stream_callback:
+                        stream_callback(line)
+
+            output = "".join(output_lines)
+            return_code = process.poll()
+
+            return {
+                "status": return_code if return_code is not None else 0,
+                "result": output,
+            }
+
+        except subprocess.TimeoutExpired:
+            if process:
+                process.kill()
+            return {
+                "status": -1,
+                "result": f"Command timed out after {timeout} seconds",
+            }
+        except Exception as e:
+            return {"status": -1, "result": f"Error running command: {str(e)}"}
+
+    def run_os_command(
+        self,
+        command: str,
+        stream_callback: Any = None,
+        recv_timeout: Optional[float] = 5.0,
+    ) -> Dict[str, Any]:
+        timeout = int(recv_timeout * 60) if recv_timeout else 300
+        full_command = f"cd {self.local_workplace} && {command}"
+
+        process = None
+        try:
+            process = subprocess.Popen(
+                ["/bin/bash", "-c", full_command],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                cwd=self.local_workplace,
+            )
+
+            output_lines = []
+            while True:
+                line = process.stdout.readline()
+                if not line and process.poll() is not None:
+                    break
+                if line:
+                    output_lines.append(line)
+                    if stream_callback:
+                        stream_callback(line)
+
+            output = "".join(output_lines)
+            return_code = process.poll()
+
+            return {
+                "status": return_code if return_code is not None else 0,
+                "result": output,
+            }
+
+        except subprocess.TimeoutExpired:
+            if process:
+                process.kill()
+            return {
+                "status": -1,
+                "result": f"Command timed out after {timeout} seconds",
+            }
+        except Exception as e:
+            return {"status": -1, "result": f"Error running command: {str(e)}"}
+
     def run_python(self, code: str, **kwargs) -> Dict[str, Any]:
         return self.run_command(f"python -c {repr(code)}", **kwargs)
 
