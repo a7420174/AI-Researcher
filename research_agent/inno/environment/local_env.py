@@ -31,6 +31,7 @@ class LocalEnv:
             Path(config.local_root).resolve() / config.workplace_name
         )
         self.docker_workplace = f"/{config.workplace_name}"
+        self.workplace = self.local_workplace
 
         self.conda_path = config.conda_path or os.environ.get(
             "CONDA_PATH", "/opt/conda"

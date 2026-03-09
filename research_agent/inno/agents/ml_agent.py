@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict, Any, Union
 import json
 
 from research_agent.inno.types import Agent
@@ -6,10 +6,11 @@ from research_agent.inno.registry import (
     register_agent,
     get_tools,
 )  # ← 레지스트리 API만 사용
-from research_agent.inno.environment.docker_env import DockerEnv
 from research_agent.inno.environment.docker_env import (
+    DockerEnv,
     with_env as with_env_docker,
-)  # ← env 주입 래퍼
+)
+from research_agent.inno.environment.local_env import LocalEnv
 
 
 def case_resolved(task_response):
@@ -35,15 +36,15 @@ def case_not_resolved(failure_reason):
 
 @register_agent("get_ml_agent")
 def get_ml_agent(model: str, **kwargs):
-    code_env: DockerEnv = kwargs.get("code_env", None)
+    code_env: Union[DockerEnv, LocalEnv] = kwargs.get("code_env", None)
 
     def instructions(context_variables):
-        working_dir = context_variables.get("working_dir", None)
+        working_dir = code_env.workplace
         return f"""\
-You are a machine learning engineer tasked with implementing innovative ML projects. Your workspace is: `/{working_dir}`.
+You are a machine learning engineer tasked with implementing innovative ML projects. Your workspace is: `{working_dir}`.
 
 OBJECTIVE:
-Create a self-contained, well-organized implementation in `/{working_dir}/project` based on:
+Create a self-contained, well-organized implementation in `{working_dir}/project` based on:
 - The provided innovative idea
 - Reference codebases (up to 5 repositories)
 - The detailed implementation plan

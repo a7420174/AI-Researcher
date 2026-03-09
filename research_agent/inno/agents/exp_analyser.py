@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List
+from typing import List, Union
 
 from research_agent.inno.types import Agent, Result
 
@@ -9,13 +9,16 @@ from research_agent.inno.types import Agent, Result
 from research_agent.inno.tools.file_surfer_tool import with_env as with_env_file
 from research_agent.inno.environment.docker_env import with_env as with_env_docker
 from research_agent.inno.environment.docker_env import DockerEnv
+from research_agent.inno.environment.local_env import LocalEnv
 from research_agent.inno.environment.markdown_browser import RequestsMarkdownBrowser
 
 # ✅ registry에서 툴을 이름으로 조회/래핑
 from research_agent.inno.registry import get_tools, register_agent
 
 
-def case_resolved(context_variables: dict, analysis_report: str, further_plan: dict[str, str]):
+def case_resolved(
+    context_variables: dict, analysis_report: str, further_plan: dict[str, str]
+):
     """
     After you have carefully and comprehensively reviewed the existing resources and the current project,
     and fully understood the innovative idea, use this function to provide:
@@ -28,10 +31,9 @@ def case_resolved(context_variables: dict, analysis_report: str, further_plan: d
     """
     if "experiment_report" not in context_variables:
         context_variables["experiment_report"] = []
-    context_variables["experiment_report"].append({
-        "analysis_report": analysis_report,
-        "further_plan": further_plan
-    })
+    context_variables["experiment_report"].append(
+        {"analysis_report": analysis_report, "further_plan": further_plan}
+    )
     ret_val = f"""\
 You have provided the analysis report of existing experiments and a further plan for the `Machine Learning Agent`.
 The analysis report is: {analysis_report}
@@ -43,17 +45,20 @@ The further plan is: {further_plan}
     )
 
 
-@register_agent("get_exp_analyser_agent")  # 선택: 레지스트리에 팩토리 등록 (이름은 기존 호출부와 일치)
+@register_agent(
+    "get_exp_analyser_agent"
+)  # 선택: 레지스트리에 팩토리 등록 (이름은 기존 호출부와 일치)
 def get_exp_analyser_agent(model: str = "gpt-4o", **kwargs):
     file_env: RequestsMarkdownBrowser = kwargs.get("file_env", None)
     assert file_env is not None, "file_env is required"
-    code_env: DockerEnv = kwargs.get("code_env", None)
+    code_env: Union[DockerEnv, LocalEnv] = kwargs.get("code_env", None)
     assert code_env is not None, "code_env is required"
 
     def instructions(context_variables: dict):
-        return """\
-You are given an innovative idea and some experimental results conducted by the `Machine Learning Agent` in `/workspace/projects/` to implement the idea.
-You also have some reference codebases and papers in the working directory `/workspace`.
+        working_dir = code_env.workplace
+        return f"""\
+You are given an innovative idea and some experimental results conducted by the `Machine Learning Agent` in `{working_dir}/projects/` to implement the idea.
+You also have some reference codebases and papers in the working directory `{working_dir}`.
 
 Your task is to:
 1. Analyze the experimental results and provide a detailed analysis report.

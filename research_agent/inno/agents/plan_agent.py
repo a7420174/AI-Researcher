@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from typing import Union
+
 from research_agent.inno.types import Agent
 from research_agent.inno.registry import register_agent, get_tools
-from research_agent.inno.environment.docker_env import DockerEnv, with_env  # env 주입 래퍼만 사용
+from research_agent.inno.environment.docker_env import DockerEnv, with_env
+from research_agent.inno.environment.local_env import LocalEnv
+
 
 def case_resolved(context_variables):
-    """ 
+    """
     The function to merge the plan of the dataset, model, and training process.
     Use this function only after you have carefully reviewed the existing resources
     and understand the task, and get the plan of the dataset, model, training and testing process.
@@ -30,17 +34,17 @@ I have reviewed the existing resources and understand the task, and here is the 
 
 @register_agent("get_coding_plan_agent")
 def get_coding_plan_agent(model: str, **kwargs):
-    code_env: DockerEnv = kwargs.get("code_env", None)
+    code_env: Union[DockerEnv, LocalEnv] = kwargs.get("code_env", None)
     assert code_env is not None, "code_env is required"
 
     def instructions(context_variables):
-        working_dir = context_variables.get("working_dir", None)
+        working_dir = code_env.workplace
         return f"""\
 You are a Machine Learning Expert tasked with creating a detailed implementation plan for innovative ML projects.
 
 AVAILABLE RESOURCES:
 1. User's innovative idea
-2. Reference codebases (in `/{working_dir}`) selected by the `Prepare Agent`
+2. Reference codebases (in `{working_dir}`) selected by the `Prepare Agent`
 3. Comprehensive notes from the `Survey Agent` (to be used as model plan)
 
 WORKFLOW:

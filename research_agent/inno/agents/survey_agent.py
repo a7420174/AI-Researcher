@@ -1,9 +1,10 @@
-from typing import List, Callable, Optional
+from typing import List, Callable, Optional, Union
 
 from research_agent.inno.tools.file_surfer_tool import with_env as with_env_file
 from research_agent.inno.environment.markdown_browser import RequestsMarkdownBrowser
 from research_agent.inno.environment.docker_env import with_env as with_env_docker
 from research_agent.inno.environment.docker_env import DockerConfig, DockerEnv
+from research_agent.inno.environment.local_env import LocalEnv
 from research_agent.inno.types import Agent, Result
 
 from research_agent.inno.registry import (
@@ -151,15 +152,16 @@ Remember: Your analysis forms the theoretical foundation for the subsequent code
 # --------------------------------------------------------------------
 @register_agent("get_code_survey_agent")
 def get_code_survey_agent(model: str, **kwargs):
-    code_env: DockerEnv = kwargs.get("code_env", None)
+    code_env: Union[DockerEnv, LocalEnv] = kwargs.get("code_env", None)
     assert code_env is not None, "code_env is required"
 
     def instructions(context_variables):
+        working_dir = code_env.workplace
         return f"""\
 You are a `Code Survey Agent` specialized in analyzing code implementations of academic concepts. Your task is to examine codebases and match theoretical concepts with their practical implementations.
 
 OBJECTIVE:
-- Analyze codebases from reference papers in `/{code_env.workplace_name}/`
+- Analyze codebases from reference papers in `{working_dir}/`
 - Map academic definitions and mathematical formulas to their code implementations
 - Create comprehensive implementation notes
 
@@ -256,7 +258,7 @@ The notes are as follows:
 def get_survey_agent(model: str = "gpt-4o", **kwargs):
     file_env: RequestsMarkdownBrowser = kwargs.get("file_env", None)
     assert file_env is not None, "file_env is required"
-    code_env: DockerEnv = kwargs.get("code_env", None)
+    code_env: Union[DockerEnv, LocalEnv] = kwargs.get("code_env", None)
     assert code_env is not None, "code_env is required"
 
     def instructions(context_variables):

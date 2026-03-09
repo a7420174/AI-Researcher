@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Union
 import json
 
 from research_agent.inno.types import Agent, Result
@@ -10,6 +10,7 @@ from research_agent.inno.environment.docker_env import DockerEnv
 from research_agent.inno.environment.docker_env import (
     with_env as with_env_docker,
 )  # ← env 주입 래퍼
+from research_agent.inno.environment.local_env import LocalEnv
 
 
 def case_resolved(
@@ -43,12 +44,12 @@ I have determined the reference codebases and paths according to the existing re
 
 @register_agent("get_prepare_agent")
 def get_prepare_agent(model: str, **kwargs):
-    code_env: DockerEnv = kwargs.get("code_env", None)
+    code_env: Union[DockerEnv, LocalEnv] = kwargs.get("code_env", None)
 
     def instructions(context_variables):
-        working_dir = context_variables.get("working_dir", None)
+        working_dir = code_env.workplace
         return f"""
-You are given a list of papers, searching results of the papers on GitHub, and innovative ideas according to the papers. Your working directory is `/{working_dir}`, you can only access files in this directory.
+You are given a list of papers, searching results of the papers on GitHub, and innovative ideas according to the papers. Your working directory is `{working_dir}`, you can only access files in this directory.
 
 Your task is to go through the searching results, find out more detailed information about repositories in the searching results, and determine which repositories are the most relevant and useful to the innovative ideas. You can determine the relevance and usefulness by the following criteria:
 1. Repositories with more stars are more recommended.
@@ -62,7 +63,7 @@ You should choose at least 5 repositories as the reference codebases.
 I should use the determined repositories as reference codebases to implement the innovative ideas, so your decision should be as accurate as possible, and the number of repositories should be as less as possible. 
 
 During the decision process, you can use the following tools:
-1. You can use `execute_command` to git clone the repository to the working directory `/{working_dir}`. Choose 5-8 repositories you really need. And you should reserve the names of the repositories.
+1. You can use `execute_command` to git clone the repository to the working directory `{working_dir}`. Choose 5-8 repositories you really need. And you should reserve the names of the repositories.
 
 2. You can use `gen_code_tree_structure` to generate the tree structure of the code in the repository.
 

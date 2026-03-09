@@ -125,6 +125,8 @@ class InnoFlow(FlowModule):
     ):
         super().__init__(cache_path, log_path, model)
 
+        self.code_env = code_env
+
         # ToolModule 바인딩
         self.git_search = ToolModule(github_search, cache_path)
 
@@ -313,6 +315,14 @@ Your task is to carefully review the existing resources and understand the task,
         plan_res = plan_messages[-1]["content"]
 
         # write the model based on the model survey notes
+        project_dir = (
+            self.code_env.workplace + "/project"
+            if self.code_env
+            else f"/{workplace_name}/project"
+        )
+        workplace_dir = (
+            self.code_env.workplace if self.code_env else f"/{workplace_name}"
+        )
         ml_dev_query = f"""\
 INPUT:
 You are given an innovative idea:
@@ -323,31 +333,31 @@ And I have conducted the comprehensive survey on the innovative idea and the pap
 {survey_res}
 You should carefully go through the math formula and the code implementation, and implement the innovative idea according to the plan and existing resources.
 
-Your task is to implement the innovative idea after carefully reviewing the math formula and the code implementation in the paper notes and existing resources in the directory `/{workplace_name}`. You should select ONE most appropriate and lightweight dataset from the given datasets, and implement the idea by creating new model, and EXACTLY run TWO epochs of training and testing on the ACTUAL dataset on the GPU device. Note that EVERY atomic academic concept in model survey notes should be implemented in the project.
+Your task is to implement the innovative idea after carefully reviewing the math formula and the code implementation in the paper notes and existing resources in the directory `{workplace_dir}`. You should select ONE most appropriate and lightweight dataset from the given datasets, and implement the idea by creating new model, and EXACTLY run TWO epochs of training and testing on the ACTUAL dataset on the GPU device. Note that EVERY atomic academic concept in model survey notes should be implemented in the project.
 
 PROJECT STRUCTURE REQUIREMENTS:
 1. Directory Organization
-- Data: `/{workplace_name}/project/data/`
+- Data: `{project_dir}/data/`
      * Use the dataset selected by the `Plan Agent`
      * NO toy or random datasets
-- Model Components: `/{workplace_name}/project/model/`
+- Model Components: `{project_dir}/model/`
     * All model architecture files
     * All model components as specified in survey notes
     * Dataset processing scripts and utilities
 
-- Training: `/{workplace_name}/project/training/`
+- Training: `{project_dir}/training/`
     * Training loop implementation
     * Loss functions
     * Optimization logic
 
-- Testing: `/{workplace_name}/project/testing/`
+- Testing: `{project_dir}/testing/`
     * Evaluation metrics
     * Testing procedures
 
-- Data processing: `/{workplace_name}/project/data_processing/`
+- Data processing: `{project_dir}/data_processing/`
     * Implement the data processing pipeline
 
-- Main Script: `/{workplace_name}/project/run_training_testing.py`
+- Main Script: `{project_dir}/run_training_testing.py`
     * Complete training and testing pipeline
     * Configuration management
     * Results logging
@@ -374,8 +384,8 @@ PROJECT STRUCTURE REQUIREMENTS:
 EXECUTION WORKFLOW:
 1. Dataset Setup
    - Choose appropriate dataset from references (You MUST use the actual dataset, not the toy or random datasets) [IMPORTANT!!!]
-   - Download to data directory `/{workplace_name}/project/data`
-   - Implement processing pipeline in `/{workplace_name}/project/data_processing/`
+   - Download to data directory `{project_dir}/data`
+   - Implement processing pipeline in `{project_dir}/data_processing/`
    - Verify data loading
 
 2. Model Implementation
@@ -477,13 +487,13 @@ The suggestion about your last implementation:
 {judge_res}
 Your task is to modify the project according to the suggestion. Note that you should MODIFY rather than create a new project! Take full advantage of the existing resources! Still use the SAME DATASET!
 
-[IMPORTANT] You should modify the project in the directory `/{workplace_name}/project`, rather than create a new project!
+[IMPORTANT] You should modify the project in the directory `{project_dir}`, rather than create a new project!
 
-[IMPORTANT] If you meet dataset missing problem, you should download the dataset from the reference codebases, and put the dataset in the directory `/{workplace_name}/project/data`. 
+[IMPORTANT] If you meet dataset missing problem, you should download the dataset from the reference codebases, and put the dataset in the directory `{project_dir}/data`. 
 
 [IMPORTANT] You CANNOT stop util you 2 epochs of training and testing on your model with the ACTUAL dataset.
 
-[IMPORTANT] You encounter ImportError while using `run_python()`, you should check whether every `__init__.py` file is correctly implemented in the directories in the `/{workplace_name}/project`!
+[IMPORTANT] You encounter ImportError while using `run_python()`, you should check whether every `__init__.py` file is correctly implemented in the directories in the `{project_dir}`!
 
 [IMPORTANT] Carefully check whether model and its components are correctly implemented according to the model survey notes!
 
@@ -592,9 +602,9 @@ You have conducted the experiments and get the experimental results:
 {submit_res}
 And a detailed analysis report about the results are given by the `Experiment Planner Agent`:
 {analysis_report}
-Your task is to refine the experimental results according to the analysis report by modifying existing code in the directory `/{workplace_name}/project`. You should NOT stop util every experiment is done with ACTUAL results. If you encounter Out of Memory problem, you should try another specific GPU device. If you encounter ANY other problems, you should try your best to solve the problem by yourself.
+Your task is to refine the experimental results according to the analysis report by modifying existing code in the directory `{project_dir}`. You should NOT stop util every experiment is done with ACTUAL results. If you encounter Out of Memory problem, you should try another specific GPU device. If you encounter ANY other problems, you should try your best to solve the problem by yourself.
 
-Note that you should fully utilize the existing code in the directory `/{workplace_name}/project` as much as possible. If you want to add more experiments, you should add the python script in the directory `/{workplace_name}/project/`, like `run_training_testing.py`. Select and output the important results during the experiments into the log files, do NOT output them all in the terminal.
+Note that you should fully utilize the existing code in the directory `{project_dir}` as much as possible. If you want to add more experiments, you should add the python script in the directory `{project_dir}/`, like `run_training_testing.py`. Select and output the important results during the experiments into the log files, do NOT output them all in the terminal.
 """
             judge_messages.append({"role": "user", "content": refine_query})
             judge_messages, context_variables = await self.ml_agent(

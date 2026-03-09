@@ -13,30 +13,51 @@ from typing import Optional, Union, Dict, Callable, Any, Tuple, List
 from functools import update_wrapper
 from inspect import signature
 
+
 # --- 안전한 로깅을 위한 마스킹 ---
 def _mask_token(s: str) -> str:
     if not s:
         return s
     # 너무 공격적으로 마스킹하지 않고, github 토큰 형태만 간단히 마스킹
-    return s.replace(os.environ.get("GITHUB_AI_TOKEN", ""), "***") if "GITHUB" in os.environ else s
+    return (
+        s.replace(os.environ.get("GITHUB_AI_TOKEN", ""), "***")
+        if "GITHUB" in os.environ
+        else s
+    )
+
 
 # --- 예외 타입 ---
 class DockerEnvError(Exception): ...
+
+
 class DockerRunError(DockerEnvError): ...
+
+
 class DockerTimeoutError(DockerEnvError): ...
+
+
 class GitError(DockerEnvError): ...
+
+
 class NetworkError(DockerEnvError): ...
+
+
 class PackageError(DockerEnvError): ...
+
 
 # --- 안전한 tar 추출 ---
 def _safe_tar_extract(tar_path: Path, dest_dir: Path) -> None:
     try:
         dest_dir.mkdir(parents=True, exist_ok=True)
         with tarfile.open(tar_path, "r:gz") as tar:
+
             def is_within_directory(directory, target):
                 abs_directory = os.path.abspath(directory)
                 abs_target = os.path.abspath(target)
-                return os.path.commonpath([abs_directory]) == os.path.commonpath([abs_directory, abs_target])
+                return os.path.commonpath([abs_directory]) == os.path.commonpath(
+                    [abs_directory, abs_target]
+                )
+
             for member in tar.getmembers():
                 target_path = dest_dir / member.name
                 if not is_within_directory(dest_dir, target_path):
@@ -45,9 +66,15 @@ def _safe_tar_extract(tar_path: Path, dest_dir: Path) -> None:
     except Exception as e:
         raise PackageError(f"Failed to extract package '{tar_path}': {e}")
 
+
 # --- 공통 subprocess 실행기 ---
-def _run(cmd: List[str], cwd: Optional[Path] = None, env: Optional[Dict[str, str]] = None,
-         timeout: Optional[int] = 120, check: bool = False) -> subprocess.CompletedProcess:
+def _run(
+    cmd: List[str],
+    cwd: Optional[Path] = None,
+    env: Optional[Dict[str, str]] = None,
+    timeout: Optional[int] = 120,
+    check: bool = False,
+) -> subprocess.CompletedProcess:
     # print로 남길 때는 마스킹
     printable = " ".join(_mask_token(c) for c in cmd)
     # print(f"Running: {printable}")  # 필요 시 디버그
@@ -59,16 +86,19 @@ def _run(cmd: List[str], cwd: Optional[Path] = None, env: Optional[Dict[str, str
             capture_output=True,
             text=True,
             timeout=timeout,
-            check=check
+            check=check,
         )
         return cp
     except subprocess.TimeoutExpired as e:
         raise DockerTimeoutError(f"Command timed out: {printable}") from e
     except subprocess.CalledProcessError as e:
         # check=True 일 때만 여기로 옴
-        raise DockerRunError(f"Command failed: {printable}\nSTDOUT: {e.stdout}\nSTDERR: {e.stderr}") from e
+        raise DockerRunError(
+            f"Command failed: {printable}\nSTDOUT: {e.stdout}\nSTDERR: {e.stderr}"
+        ) from e
     except Exception as e:
         raise DockerEnvError(f"Command error: {printable} -> {e}") from e
+
 
 # --- 포트 유틸 ---
 def _is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
@@ -80,6 +110,7 @@ def _is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
         except Exception:
             return False
 
+
 def _find_free_port(preferred: Optional[int] = None) -> int:
     if preferred and not _is_port_open("127.0.0.1", preferred):
         return preferred
@@ -88,14 +119,19 @@ def _find_free_port(preferred: Optional[int] = None) -> int:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
 
+
 # --- Docker 상태 확인 ---
 def docker_container_exists(name: str) -> bool:
-    cp = _run(["docker", "ps", "-a", "--filter", f"name=^{name}$", "--format", "{{.Names}}"])
+    cp = _run(
+        ["docker", "ps", "-a", "--filter", f"name=^{name}$", "--format", "{{.Names}}"]
+    )
     return name in cp.stdout.strip().splitlines()
+
 
 def docker_container_running(name: str) -> bool:
     cp = _run(["docker", "ps", "--filter", f"name=^{name}$", "--format", "{{.Names}}"])
     return name in cp.stdout.strip().splitlines()
+
 
 def docker_container_inspect(name: str) -> dict:
     cp = _run(["docker", "inspect", name], check=False)
@@ -104,6 +140,7 @@ def docker_container_inspect(name: str) -> dict:
         return arr[0] if arr else {}
     except json.JSONDecodeError:
         return {}
+
 
 def docker_mapped_host_port(name: str, container_port: int) -> Optional[int]:
     """
@@ -123,28 +160,30 @@ def docker_mapped_host_port(name: str, container_port: int) -> Optional[int]:
             return None
     return None
 
+
 @dataclass
 class DockerConfig:
     container_name: str
     workplace_name: str
-    communication_port: int                 # host port to map to container_port (default 8000)
+    communication_port: int  # host port to map to container_port (default 8000)
     test_pull_name: str = "main"
     task_name: Optional[str] = None
     git_clone: bool = False
-    setup_package: Optional[str] = None     # packages/foo.tar.gz의 'foo' 이름
+    setup_package: Optional[str] = None  # packages/foo.tar.gz의 'foo' 이름
     local_root: str = field(default_factory=lambda: os.getcwd())
     # 선택 필드 (기존 상수 대체 가능)
-    base_image: Optional[str] = None        # 없으면 환경변수 BASE_IMAGES 시도
-    gpus: Optional[str] = None              # "all", "device=0", "" 등
-    platform: Optional[str] = None          # "linux/amd64" 등
+    base_image: Optional[str] = None  # 없으면 환경변수 BASE_IMAGES 시도
+    gpus: Optional[str] = None  # "all", "device=0", "" 등
+    platform: Optional[str] = None  # "linux/amd64" 등
     # 네트워크/대기 설정
-    container_port: int = 8000              # 컨테이너 내부 TCP 서버 포트
-    wait_timeout: int = 90                  # 컨테이너 기동/포트 오픈 대기 초
-    wait_interval: float = 1.0              # 폴링 간격
+    container_port: int = 8000  # 컨테이너 내부 TCP 서버 포트
+    wait_timeout: int = 90  # 컨테이너 기동/포트 오픈 대기 초
+    wait_interval: float = 1.0  # 폴링 간격
     # Git 정보
     git_owner_repo: str = "tjb-tech/metachain"
-    ai_user: Optional[str] = None           # 환경변수 AI_USER 또는 전달값
-    github_ai_token: Optional[str] = None   # 환경변수 GITHUB_AI_TOKEN 또는 전달값
+    ai_user: Optional[str] = None  # 환경변수 AI_USER 또는 전달값
+    github_ai_token: Optional[str] = None  # 환경변수 GITHUB_AI_TOKEN 또는 전달값
+
 
 class DockerEnv:
     def __init__(self, config: Union[DockerConfig, Dict[str, Any]]):
@@ -155,8 +194,11 @@ class DockerEnv:
         self.config = config
         self.container_name = config.container_name
         self.workplace_name = config.workplace_name
-        self.local_workplace = str(Path(config.local_root).resolve() / config.workplace_name)
+        self.local_workplace = str(
+            Path(config.local_root).resolve() / config.workplace_name
+        )
         self.docker_workplace = f"/{config.workplace_name}"
+        self.workplace = self.docker_workplace
 
         self.communication_port = config.communication_port
         self.container_port = config.container_port
@@ -170,11 +212,15 @@ class DockerEnv:
         if not self.base_image:
             raise DockerEnvError("base_image(또는 환경변수 BASE_IMAGES)가 필요합니다.")
 
-        self.gpus = (config.gpus if config.gpus is not None else os.environ.get("GPUS", "")).strip()
+        self.gpus = (
+            config.gpus if config.gpus is not None else os.environ.get("GPUS", "")
+        ).strip()
         self.platform = config.platform or os.environ.get("PLATFORM")
 
         self.ai_user = config.ai_user or os.environ.get("AI_USER", "")
-        self.github_ai_token = config.github_ai_token or os.environ.get("GITHUB_AI_TOKEN", "")
+        self.github_ai_token = config.github_ai_token or os.environ.get(
+            "GITHUB_AI_TOKEN", ""
+        )
 
         # 작업 디렉토리 준비
         Path(self.local_workplace).mkdir(parents=True, exist_ok=True)
@@ -206,10 +252,14 @@ class DockerEnv:
         if docker_container_exists(self.container_name):
             if docker_container_running(self.container_name):
                 # 이미 실행 중 → 포트 동기화
-                mapped = docker_mapped_host_port(self.container_name, self.container_port)
+                mapped = docker_mapped_host_port(
+                    self.container_name, self.container_port
+                )
                 if mapped:
                     self.communication_port = mapped
-                print(f"[info] Container '{self.container_name}' already running on host:{self.communication_port}")
+                print(
+                    f"[info] Container '{self.container_name}' already running on host:{self.communication_port}"
+                )
             else:
                 # 정지 상태 → 시작
                 self._start_container()
@@ -218,8 +268,12 @@ class DockerEnv:
             self._run_container()
 
         # 4) readiness 대기: Running + host 포트 오픈
-        self._wait_for_ready(timeout=self.config.wait_timeout, interval=self.config.wait_interval)
-        print(f"[ready] Container '{self.container_name}' is ready (host:{self.communication_port} -> container:{self.container_port}).")
+        self._wait_for_ready(
+            timeout=self.config.wait_timeout, interval=self.config.wait_interval
+        )
+        print(
+            f"[ready] Container '{self.container_name}' is ready (host:{self.communication_port} -> container:{self.container_port})."
+        )
 
     def stop_container(self) -> None:
         if not docker_container_exists(self.container_name):
@@ -228,8 +282,12 @@ class DockerEnv:
         if cp.returncode != 0:
             raise DockerRunError(f"Failed to stop container: {cp.stderr}")
 
-    def run_command(self, command: str, stream_callback: Optional[Callable[[str], None]] = None,
-                    recv_timeout: Optional[float] = 5.0) -> Dict[str, Any]:
+    def run_command(
+        self,
+        command: str,
+        stream_callback: Optional[Callable[[str], None]] = None,
+        recv_timeout: Optional[float] = 5.0,
+    ) -> Dict[str, Any]:
         """
         컨테이너 내 TCP 서버(컨테이너 포트: self.container_port, 호스트 포트: self.communication_port)로
         NDJSON 스트리밍 프로토콜(한 줄당 1 JSON 오브젝트)로 명령 전달 및 수신.
@@ -259,8 +317,12 @@ class DockerEnv:
             partial = ""
             start = time.time()
             while True:
-                if recv_timeout and (time.time() - start) > (recv_timeout * 60):  # 안전 상한 (옵션)
-                    raise NetworkError("Timed out waiting for final response from TCP server.")
+                if recv_timeout and (time.time() - start) > (
+                    recv_timeout * 60
+                ):  # 안전 상한 (옵션)
+                    raise NetworkError(
+                        "Timed out waiting for final response from TCP server."
+                    )
 
                 try:
                     chunk = s.recv(buffer_size)
@@ -312,14 +374,25 @@ class DockerEnv:
                 # 퍼블릭 또는 로컬 인증(JSON credential helper 등) 기대
                 safe_url = f"https://github.com/{owner_repo}.git"
 
-            cp = _run(["git", "clone", "-b", self.test_pull_name, safe_url, str(repo_dir)], check=False)
+            cp = _run(
+                ["git", "clone", "-b", self.test_pull_name, safe_url, str(repo_dir)],
+                check=False,
+            )
             if cp.returncode != 0:
-                raise GitError(f"Failed to clone: {_mask_token(cp.stderr or cp.stdout)}")
+                raise GitError(
+                    f"Failed to clone: {_mask_token(cp.stderr or cp.stdout)}"
+                )
 
         # 브랜치 생성/전환
-        new_branch = f"{self.test_pull_name}_{self.task_name}" if self.task_name else self.test_pull_name
+        new_branch = (
+            f"{self.test_pull_name}_{self.task_name}"
+            if self.task_name
+            else self.test_pull_name
+        )
         # 존재 여부 확인
-        cp = _run(["git", "rev-parse", "--verify", new_branch], cwd=repo_dir, check=False)
+        cp = _run(
+            ["git", "rev-parse", "--verify", new_branch], cwd=repo_dir, check=False
+        )
         if cp.returncode != 0:
             # 새 브랜치 생성
             cp2 = _run(["git", "checkout", "-b", new_branch], cwd=repo_dir, check=False)
@@ -327,17 +400,23 @@ class DockerEnv:
                 # 이미 있거나 생성 실패 → 스위치 시도
                 cp3 = _run(["git", "checkout", new_branch], cwd=repo_dir, check=False)
                 if cp3.returncode != 0:
-                    raise GitError(f"Failed to create/switch branch '{new_branch}': {cp2.stderr or cp3.stderr}")
+                    raise GitError(
+                        f"Failed to create/switch branch '{new_branch}': {cp2.stderr or cp3.stderr}"
+                    )
         else:
             # 존재 → 체크아웃
             cp4 = _run(["git", "checkout", new_branch], cwd=repo_dir, check=False)
             if cp4.returncode != 0:
-                raise GitError(f"Failed to switch to existing branch '{new_branch}': {cp4.stderr}")
+                raise GitError(
+                    f"Failed to switch to existing branch '{new_branch}': {cp4.stderr}"
+                )
 
     def _start_container(self) -> None:
         cp = _run(["docker", "start", self.container_name], check=False)
         if cp.returncode != 0:
-            raise DockerRunError(f"Failed to start container '{self.container_name}': {cp.stderr}")
+            raise DockerRunError(
+                f"Failed to start container '{self.container_name}': {cp.stderr}"
+            )
         mapped = docker_mapped_host_port(self.container_name, self.container_port)
         if mapped:
             self.communication_port = mapped
@@ -355,13 +434,19 @@ class DockerEnv:
         if self.gpus:
             cmd += ["--gpus", self.gpus]
         cmd += [
-            "--name", self.container_name,
-            "--user", "root",
-            "-v", f"{self.local_workplace}:{self.docker_workplace}",
-            "-w", self.docker_workplace,
-            "-p", f"{self.communication_port}:{self.container_port}",
-            "--restart", "unless-stopped",
-            self.base_image
+            "--name",
+            self.container_name,
+            "--user",
+            "root",
+            "-v",
+            f"{self.local_workplace}:{self.docker_workplace}",
+            "-w",
+            self.docker_workplace,
+            "-p",
+            f"{self.communication_port}:{self.container_port}",
+            "--restart",
+            "unless-stopped",
+            self.base_image,
         ]
         cp = _run(cmd, check=False)
         if cp.returncode != 0:
@@ -375,7 +460,9 @@ class DockerEnv:
                 break
             time.sleep(interval)
         else:
-            raise DockerTimeoutError(f"Container '{self.container_name}' did not enter Running within {timeout}s")
+            raise DockerTimeoutError(
+                f"Container '{self.container_name}' did not enter Running within {timeout}s"
+            )
 
         # 2) 포트 오픈 대기 (호스트 측)
         while time.time() - start < timeout:
@@ -385,9 +472,13 @@ class DockerEnv:
             if _is_port_open("127.0.0.1", int(self.communication_port)):
                 return
             time.sleep(interval)
-        raise DockerTimeoutError(f"Port {self.communication_port} not open within {timeout}s")
+        raise DockerTimeoutError(
+            f"Port {self.communication_port} not open within {timeout}s"
+        )
+
 
 # ---------------------- 데코레이터 ----------------------
+
 
 def with_env(env: DockerEnv):
     """
@@ -395,6 +486,7 @@ def with_env(env: DockerEnv):
     - 원 함수의 시그니처에서 'env' 매개변수를 숨겨 사용자 경험 개선
     - docstring 내 {docker_workplace}, {local_workplace} 치환(안전 처리)
     """
+
     def decorator(func: Callable[..., Any]):
         def wrapped(*args, **kwargs):
             kwargs["env"] = env
@@ -414,9 +506,12 @@ def with_env(env: DockerEnv):
         doc = doc.replace("{local_workplace}", env.local_workplace)
         wrapped.__doc__ = doc
         return wrapped
+
     return decorator
 
+
 # ---------------------- 호환 헬퍼 (이름 유지) ----------------------
+
 
 def check_container_ports(container_name: str) -> Optional[Tuple[int, int]]:
     """
@@ -429,7 +524,7 @@ def check_container_ports(container_name: str) -> Optional[Tuple[int, int]]:
     out = cp.stdout.strip()
     if not out:
         return None
-    # 예: 
+    # 예:
     # 8000/tcp -> 0.0.0.0:12345
     # 22/tcp   -> 0.0.0.0:2222
     for line in out.splitlines():
@@ -449,8 +544,10 @@ def check_container_ports(container_name: str) -> Optional[Tuple[int, int]]:
         return (host_port, container_port)
     return None
 
+
 def check_container_exist(container_name: str) -> bool:
     return docker_container_exists(container_name)
+
 
 def check_container_running(container_name: str) -> bool:
     return docker_container_running(container_name)
