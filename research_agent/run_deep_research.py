@@ -74,19 +74,34 @@ Topic: {topic}{suggestion_prefix}"""
                 continue
 
             research_content = ""
-            for msg in reversed(survey_messages):
-                if msg.get("role") == "assistant":
-                    content = msg.get("content", "")
-                    if content and "<final_answer>" not in content:
-                        research_content = content
-                        break
+            has_case_resolved = False
+
+            for idx, msg in enumerate(survey_messages):
+                if msg.get("role") == "assistant" and msg.get("tool_calls"):
+                    for tc in msg.get("tool_calls", []):
+                        func_name = tc.get("function", {}).get("name", "")
+                        if func_name == "case_resolved":
+                            has_case_resolved = True
+                            if idx > 0:
+                                prev_msg = survey_messages[idx - 1]
+                                if prev_msg.get("role") == "assistant":
+                                    research_content = prev_msg.get("content", "")
+                            break
+
+            if not research_content:
+                for msg in reversed(survey_messages):
+                    if msg.get("role") == "assistant":
+                        content = msg.get("content", "")
+                        if content:
+                            research_content = content
+                            break
 
             if not research_content:
                 research_content = survey_messages[-1].get("content", "")
 
             survey_res = research_content
 
-            if not survey_res or "<final_answer>" in survey_res:
+            if not has_case_resolved:
                 continue
 
             # suggestion 추출 - fully_correct가 false면 suggestion을 다음 iteration에 전달
