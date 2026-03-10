@@ -107,6 +107,7 @@ def biomcp_article_search(
     gene: Optional[str] = None,
     disease: Optional[str] = None,
     keyword: Optional[str] = None,
+    drug: Optional[str] = None,
     since: Optional[str] = None,
     limit: int = 10,
     offset: int = 0,
@@ -118,11 +119,12 @@ def biomcp_article_search(
         gene: Gene name to search for (e.g., BRAF, KRAS)
         disease: Disease name to search for (e.g., melanoma)
         keyword: General keyword to search for
+        drug: Drug name to search for (e.g., pembrolizumab)
         since: Filter by publication date (e.g., 2024-01-01)
         limit: Maximum number of results
         offset: Offset for pagination
     """
-    args = ["search", "article"]
+    args = ["search", "article", "--sort", "relevance"]
 
     if gene:
         args.extend(["-g", gene])
@@ -130,6 +132,8 @@ def biomcp_article_search(
         args.extend(["-d", disease])
     if keyword:
         args.extend(["-q", keyword])
+    if drug:
+        args.extend(["--drug", drug])
     if since:
         args.extend(["--since", since])
 
@@ -148,7 +152,7 @@ def biomcp_article_get(
 
     Args:
         id: PubMed ID (PMID)
-        section: Optional section (e.g., "fulltext")
+        section: Optional section (e.g., "fulltext", "all")
     """
     args = ["get", "article", id]
     if section:
