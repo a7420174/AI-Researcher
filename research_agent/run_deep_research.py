@@ -73,10 +73,20 @@ Topic: {topic}{suggestion_prefix}"""
             if not survey_messages:
                 continue
 
-            last_msg = survey_messages[-1]
-            survey_res = last_msg.get("content", "")
+            research_content = ""
+            for msg in reversed(survey_messages):
+                if msg.get("role") == "assistant":
+                    content = msg.get("content", "")
+                    if content and "<final_answer>" not in content:
+                        research_content = content
+                        break
 
-            if not survey_res:
+            if not research_content:
+                research_content = survey_messages[-1].get("content", "")
+
+            survey_res = research_content
+
+            if not survey_res or "<final_answer>" in survey_res:
                 continue
 
             # suggestion 추출 - fully_correct가 false면 suggestion을 다음 iteration에 전달
