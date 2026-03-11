@@ -152,7 +152,7 @@ def biomcp_article_get(
 
     Args:
         id: PubMed ID (PMID)
-        section: Optional section (e.g., "fulltext", "all")
+        section: Optional section (e.g., "all")
     """
     args = ["get", "article", id]
     if section:

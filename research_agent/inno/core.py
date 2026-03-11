@@ -821,6 +821,7 @@ class MetaChain:
                     if not partial_response.messages[-1]["content"].startswith(
                         "[Tool Call Error]"
                     ):
+                        context_variables.update(partial_response.context_variables)
                         break
             history.extend(partial_response.messages)
             context_variables.update(partial_response.context_variables)
