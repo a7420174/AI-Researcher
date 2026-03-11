@@ -70,9 +70,11 @@ Please address these suggestions in your research."""
 
             messages = [{"role": "user", "content": research_prompt}]
 
+            print("[DEBUG] BEFORE DEEP SURVEY")
             survey_messages, context_variables = await self.survey_agent(
                 messages, context_variables
             )
+            print("[DEBUG] AFTER DEEP SURVEY")
 
             if not survey_messages:
                 continue
@@ -114,7 +116,7 @@ Please address these suggestions in your research."""
 
             suggestion_text = suggestion_dict.get("suggestion", "")
             
-            print(context_variables)
+            print("[DEBUG] context_variables :", context_variables)
 
         return {
             "survey_result": survey_res,
