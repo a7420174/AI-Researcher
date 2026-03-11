@@ -382,6 +382,7 @@ class MetaChain:
             "tool_choice": agent.tool_choice,
             "stream": stream,
             "base_url": API_BASE_URL,
+            "max_retries": 3,
         }
         NO_SENDER_MODE = any(ns in create_params["model"] for ns in NOT_SUPPORT_SENDER)
         if NO_SENDER_MODE:
