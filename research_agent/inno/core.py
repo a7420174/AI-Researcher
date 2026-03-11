@@ -1,75 +1,73 @@
-# === [NEW] imports ===
-import os
-import time
-import math
-import random
-import asyncio
-from zoneinfo import ZoneInfo
-from datetime import datetime, timezone, timedelta
-from collections import deque
-
-# ...[기존 import들 유지]...
 # Standard library imports
+import asyncio
 import copy
 import json
-from collections import defaultdict
-from typing import List, Callable, Union
+import os
+import random
+import re
+import time
+from collections import deque, defaultdict
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
+from typing import Callable, List, Optional, Union, Any
+from zoneinfo import ZoneInfo
 
-# Local imports
-import litellm
+# Third-party imports
+from httpx import ConnectError, RemoteProtocolError
+from litellm import completion, acompletion
+from litellm.exceptions import APIError
 from litellm import ContextWindowExceededError, BadRequestError
 from litellm.types.utils import Message as litellmMessage
-from .util import function_to_json, debug_print, merge_chunk, pretty_print_messages
-from .types import (
-    Agent,
-    AgentFunction,
-    Message,
-    ChatCompletionMessageToolCall,
-    Function,
-    Response,
-    Result,
-)
-from litellm import completion, acompletion
-from pathlib import Path
-from .logger import MetaChainLogger, LoggerManager
-from httpx import RemoteProtocolError, ConnectError
-from litellm.exceptions import APIError
+from openai import AsyncOpenAI
 from tenacity import (
+    RetryCallState,
     retry,
     stop_after_attempt,
     wait_exponential,
     retry_if_exception_type,
-    RetryCallState,
 )
-from openai import AsyncOpenAI
+
+# Local imports
+import litellm
 from research_agent.constant import (
     API_BASE_URL,
-    NOT_SUPPORT_SENDER,
     MUST_ADD_USER,
     NOT_SUPPORT_FN_CALL,
+    NOT_SUPPORT_SENDER,
     NOT_USE_FN_CALL,
 )
 from research_agent.inno.fn_call_converter import (
-    convert_tools_to_description,
-    convert_non_fncall_messages_to_fncall_messages,
-    SYSTEM_PROMPT_SUFFIX_TEMPLATE,
     convert_fn_messages_to_non_fn_messages,
+    convert_non_fncall_messages_to_fncall_messages,
+    convert_tools_to_description,
     interleave_user_into_messages,
+    SYSTEM_PROMPT_SUFFIX_TEMPLATE,
 )
 from research_agent.inno.memory.utils import (
-    encode_string_by_tiktoken,
     decode_tokens_by_tiktoken,
+    encode_string_by_tiktoken,
 )
-import re
+from .logger import LoggerManager, MetaChainLogger
+from .types import (
+    Agent,
+    AgentFunction,
+    ChatCompletionMessageToolCall,
+    Function,
+    Message,
+    Response,
+    Result,
+)
+from .util import debug_print, function_to_json, merge_chunk, pretty_print_messages
 
-# === [NEW] 기본 한도 (GROQ on-demand 기준) ===
-# GROQ llama-3.3-70b-versatile: RPM=30, TPM=12000
-# https://console.groq.com/docs/rate-limits 참조
+# Constants
 DEFAULT_RPM = int(os.getenv("RPM_LIMIT", "30"))
-DEFAULT_TPM = int(os.getenv("TPM_LIMIT", "12000"))  # GROQ on-demand TPM
+DEFAULT_TPM = int(os.getenv("TPM_LIMIT", "12000"))
 SAFE_TPM_RATIO = 0.8
 DEFAULT_TPM = int(DEFAULT_TPM * SAFE_TPM_RATIO)
 DEFAULT_RPD = int(os.getenv("RPD_LIMIT", "500"))
+DEFAULT_MAX_TOKENS = 10000
+DEFAULT_ESTIMATED_RESPONSE_TOKENS = 1000
+__CTX_VARS_NAME__ = "context_variables"
 
 # litellm.set_verbose = True
 litellm.num_retries = 3
@@ -113,7 +111,7 @@ logger = LoggerManager.get_logger()
 
 
 # === [IMPROVED] 토큰 기준 메시지 트렁케이션 ===
-def truncate_message(message: str, max_tokens: int = 10000) -> str:
+def truncate_message(message: str, max_tokens: int = DEFAULT_MAX_TOKENS) -> str:
     """Truncate by token count with a safety cap."""
     if not message:
         return message
@@ -144,22 +142,27 @@ def next_pt_midnight_utc():
         return now_utc, pt_midnight + timedelta(hours=8)
 
 
-# === [NEW] 토큰-인식 Rate Limiter (동기) ===
+# === [NEW] 토큰-인식 Rate Limiter (동기/비동기 공통) ===
 class TokenAwareRateLimiter:
     """RPM/TPM/RPD 동시 제어. 초과 시 안전 대기."""
 
-    def __init__(self, rpm=DEFAULT_RPM, tpm=DEFAULT_TPM, rpd=DEFAULT_RPD):
+    def __init__(
+        self,
+        rpm: int = DEFAULT_RPM,
+        tpm: int = DEFAULT_TPM,
+        rpd: int = DEFAULT_RPD,
+    ):
         self.rpm = rpm
         self.tpm = tpm
         self.rpd = rpd
-        self.req_ts = deque()
-        self.token_ts = deque()  # (timestamp, tokens)
+        self.req_ts: deque[float] = deque()
+        self.token_ts: deque[tuple[float, int]] = deque()
         self.daily_count = 0
         self.reset_utc = next_pt_midnight_utc()[1]
-        self.response_tokens_history = deque(maxlen=10)
-        self._estimated_response_tokens = 1000
+        self.response_tokens_history: deque[int] = deque(maxlen=10)
+        self._estimated_response_tokens = DEFAULT_ESTIMATED_RESPONSE_TOKENS
 
-    def update_response_tokens(self, actual_tokens: int):
+    def update_response_tokens(self, actual_tokens: int) -> None:
         """실제 응답 토큰을 기록하고 이동 평균 업데이트."""
         self.response_tokens_history.append(actual_tokens)
         if self.response_tokens_history:
@@ -171,80 +174,90 @@ class TokenAwareRateLimiter:
         """이동 평균 기반 예측 응답 토큰 반환."""
         return self._estimated_response_tokens
 
-    def _prune(self):
-        now = time.time()
-        # 최근 60초만 유지
+    def _prune(self, now: float | None = None) -> None:
+        if now is None:
+            now = time.time()
         while self.req_ts and now - self.req_ts[0] > 60:
             self.req_ts.popleft()
         while self.token_ts and now - self.token_ts[0][0] > 60:
             self.token_ts.popleft()
-        # RPD 리셋
         if datetime.now(timezone.utc) >= self.reset_utc:
             self.daily_count = 0
             self.reset_utc = next_pt_midnight_utc()[1]
 
-    def acquire(self, est_tokens: int):
-        """필요 시 대기 후 슬롯 확보."""
+    def _calculate_delay(
+        self,
+        rpm_ok: bool,
+        tpm_ok: bool,
+        rpd_ok: bool,
+        now: float,
+    ) -> float | None:
+        delays: list[float] = []
+        if not rpm_ok and self.req_ts:
+            delays.append(60 - (now - self.req_ts[0]) + 0.05)
+        if not tpm_ok and self.token_ts:
+            delays.append(60 - (now - self.token_ts[0][0]) + 0.05)
+        if not rpd_ok:
+            delays.append(
+                (self.reset_utc - datetime.now(timezone.utc)).total_seconds() + 1
+            )
+        if not delays:
+            return None
+        delay = max(0.5, min(delays))
+        return delay * random.uniform(0.8, 1.4)
+
+    def _can_acquire(self, total_est: int) -> bool:
+        rpm_ok = len(self.req_ts) < self.rpm
+        tpm_used = sum(t for _, t in self.token_ts)
+        tpm_ok = (tpm_used + total_est) <= self.tpm
+        rpd_ok = self.daily_count < self.rpd
+        return rpm_ok and tpm_ok and rpd_ok
+
+    def _record_request(self, total_est: int) -> None:
+        now = time.time()
+        self.req_ts.append(now)
+        self.token_ts.append((now, total_est))
+        self.daily_count += 1
+
+    def acquire(self, est_tokens: int) -> None:
+        """동기: 필요 시 대기 후 슬롯 확보."""
         est_response = self.get_estimated_response_tokens()
         total_est = est_tokens + est_response
         while True:
             self._prune()
-            rpm_ok = len(self.req_ts) < self.rpm
-            tpm_used = sum(t for _, t in self.token_ts)
-            tpm_ok = (tpm_used + total_est) <= self.tpm
-            rpd_ok = self.daily_count < self.rpd
-            if rpm_ok and tpm_ok and rpd_ok:
-                now = time.time()
-                self.req_ts.append(now)
-                self.token_ts.append((now, total_est))
-                self.daily_count += 1
+            if self._can_acquire(total_est):
+                self._record_request(total_est)
                 return
-            # 대기 시간 계산
-            delays = []
-            now = time.time()
-            if not rpm_ok and self.req_ts:
-                delays.append(60 - (now - self.req_ts[0]) + 0.05)
-            if not tpm_ok and self.token_ts:
-                delays.append(60 - (now - self.token_ts[0][0]) + 0.05)
-            if not rpd_ok:
-                delays.append(
-                    (self.reset_utc - datetime.now(timezone.utc)).total_seconds() + 1
-                )
-            delay = max(0.5, min(delays) if delays else 1.0)
-            delay *= random.uniform(0.8, 1.4)
-            time.sleep(delay)
+            delay = self._calculate_delay(
+                self._can_acquire(total_est),
+                self._can_acquire(total_est),
+                self._can_acquire(total_est),
+                time.time(),
+            )
+            if delay:
+                time.sleep(delay)
 
-
-# === [NEW] 토큰-인식 Rate Limiter (비동기) ===
-class AsyncTokenAwareRateLimiter(TokenAwareRateLimiter):
-    async def acquire(self, est_tokens: int):
+    async def acquire_async(self, est_tokens: int) -> None:
+        """비동기: 필요 시 대기 후 슬롯 확보."""
         est_response = self.get_estimated_response_tokens()
         total_est = est_tokens + est_response
         while True:
             self._prune()
-            rpm_ok = len(self.req_ts) < self.rpm
-            tpm_used = sum(t for _, t in self.token_ts)
-            tpm_ok = (tpm_used + total_est) <= self.tpm
-            rpd_ok = self.daily_count < self.rpd
-            if rpm_ok and tpm_ok and rpd_ok:
-                now = time.time()
-                self.req_ts.append(now)
-                self.token_ts.append((now, total_est))
-                self.daily_count += 1
+            if self._can_acquire(total_est):
+                self._record_request(total_est)
                 return
-            delays = []
-            now = time.time()
-            if not rpm_ok and self.req_ts:
-                delays.append(60 - (now - self.req_ts[0]) + 0.05)
-            if not tpm_ok and self.token_ts:
-                delays.append(60 - (now - self.token_ts[0][0]) + 0.05)
-            if not rpd_ok:
-                delays.append(
-                    (self.reset_utc - datetime.now(timezone.utc)).total_seconds() + 1
-                )
-            delay = max(0.5, min(delays) if delays else 1.0)
-            delay *= random.uniform(0.8, 1.4)
-            await asyncio.sleep(delay)
+            delay = self._calculate_delay(
+                self._can_acquire(total_est),
+                self._can_acquire(total_est),
+                self._can_acquire(total_est),
+                time.time(),
+            )
+            if delay:
+                await asyncio.sleep(delay)
+
+    async def acquire(self, est_tokens: int) -> None:
+        """비동기 acquire (호환성 위한 별칭)."""
+        await self.acquire_async(est_tokens)
 
 
 # === [NEW] 메시지 토큰 추정 ===
@@ -277,12 +290,13 @@ class MetaChain:
         log_path: path to the log file; if None, logs will not be saved to disk.
         rpm/tpm/rpd: 레이트리밋 상한 (프로젝트/티어/모델별 실제 값에 맞게 조정)
         """
-        if logger:
-            self.logger = logger
-        elif isinstance(log_path, MetaChainLogger):
+        if isinstance(log_path, MetaChainLogger):
             self.logger = log_path
-        else:
+        elif log_path:
             self.logger = MetaChainLogger(log_path=log_path)
+        else:
+            self.logger = logger if logger else LoggerManager.get_logger()
+
         if self.logger.log_path is None:
             self.logger.info(
                 "[Warning] No log path specified, logs will not be saved",
@@ -301,7 +315,7 @@ class MetaChain:
 
         # [NEW] 동기/비동기 리미터
         self.rate_limiter = TokenAwareRateLimiter(rpm, tpm, rpd)
-        self.rate_limiter_async = AsyncTokenAwareRateLimiter(rpm, tpm, rpd)
+        self.rate_limiter_async = TokenAwareRateLimiter(rpm, tpm, rpd)
 
     def get_chat_completion(
         self,
