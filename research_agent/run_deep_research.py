@@ -113,6 +113,8 @@ Please address these suggestions in your research."""
                 break
 
             suggestion_text = suggestion_dict.get("suggestion", "")
+            
+            print(context_variables)
 
         return {
             "survey_result": survey_res,
