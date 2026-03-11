@@ -32,12 +32,13 @@ def case_resolved(
 
     context_variables["suggestion_dict"] = suggestion_dict
 
-    status = "completed" if fully_correct else "needs_revision"
-    suggestion_msg = (
-        f"\nSuggestions: {json.dumps(suggestion, indent=2)}" if suggestion else ""
-    )
-
-    return f"Research {status}. Correct: {fully_correct}{suggestion_msg}"
+    if fully_correct:
+        return "[DONE]"
+    else:
+        suggestion_msg = (
+            f"\nSuggestions: {json.dumps(suggestion, indent=2)}" if suggestion else ""
+        )
+        return f"[NEEDS_REVISION]{suggestion_msg}"
 
 
 DEEP_SURVEY_AGENT_INSTRUCTIONS = """You are a `Deep Survey Agent` specialized in comprehensive research with verification.
