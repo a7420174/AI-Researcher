@@ -176,6 +176,7 @@ Output the revised introduction section incorporating all these improvements. Re
         return await self.gpt_client.chat(prompt=prompt)
 
     async def compose_section(self, target_paper: str, target_folder: str) -> str:
+        self.target_folder = target_folder
         # Read existing sections
         methodology = self.read_section_content(
             target_paper, "methodology", target_folder

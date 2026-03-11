@@ -210,6 +210,7 @@ Output the revised methodology section incorporating all these improvements whil
     async def compose_section(
         self, agent_dir: str, model_dir: str, target_paper: str, target_folder: str
     ) -> str:
+        self.target_folder = target_folder
         # Dynamically get agent files from agent_dir
         agent_files = []
         if os.path.exists(agent_dir):

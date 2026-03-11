@@ -197,6 +197,7 @@ Output the revised related work section incorporating all these improvements. Re
     async def compose_section(
         self, agent_dir: str, papers_dir: str, target_paper: str, target_folder: str
     ) -> str:
+        self.target_folder = target_folder
         # Dynamically get agent files from agent_dir
         agent_files = []
         print(f"[DEBUG] agent_dir: {agent_dir}", flush=True)

@@ -52,6 +52,7 @@ class SectionComposer(ABC):
         self.structure_iterations = structure_iterations
         self.research_field = research_field
         self.section_name = section_name
+        self.target_folder = None
 
         # Create necessary directories
         self.setup_directories()
@@ -79,6 +80,10 @@ class SectionComposer(ABC):
     def get_checkpoint_path(self, target_paper: str) -> str:
         """Get checkpoint directory path for the target paper"""
         normalized_title = self.normalize_title(target_paper)
+        if self.target_folder:
+            return os.path.join(
+                self.target_folder, f"{self.section_name}_checkpoints", normalized_title
+            )
         return (
             f"{self.research_field}/{self.section_name}_checkpoints/{normalized_title}"
         )

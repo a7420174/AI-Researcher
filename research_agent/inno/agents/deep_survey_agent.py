@@ -20,6 +20,7 @@ def case_resolved(
     Use this function when you have finished the task.
 
     Args:
+       context_variables: Must contain "final_research" key with the research summary
        fully_correct: whether the implementation/response is fully correct
        suggestion: dict {key_point: suggestion}. If fully_correct, set to None
     """
@@ -32,13 +33,7 @@ def case_resolved(
 
     context_variables["suggestion_dict"] = suggestion_dict
 
-    if fully_correct:
-        return "[DONE]"
-    else:
-        suggestion_msg = (
-            f"\nSuggestions: {json.dumps(suggestion, indent=2)}" if suggestion else ""
-        )
-        return f"[NEEDS_REVISION]{suggestion_msg}"
+    return "[DONE]"
 
 
 DEEP_SURVEY_AGENT_INSTRUCTIONS = """You are a `Deep Survey Agent` specialized in comprehensive research with verification.
@@ -112,10 +107,15 @@ DEEP_SURVEY_AGENT_INSTRUCTIONS = """You are a `Deep Survey Agent` specialized in
 
 ## MANDATORY TERMINATION
 **You MUST call the `case_resolved` function when you have finished the task.**
-- Do NOT just output the result as text
-- Do NOT continue searching after you have gathered sufficient information
-- Call `case_resolved(fully_correct=True)` when research is complete
-- Call `case_resolved(fully_correct=False, suggestion={...})` if more work is needed
+
+BEFORE calling `case_resolved`, you MUST store your final research summary in `context_variables`:
+```python
+context_variables["final_research"] = "Your comprehensive research summary here..."
+```
+
+Then call:
+- `case_resolved(fully_correct=True)` when research is complete
+- `case_resolved(fully_correct=False, suggestion={...})` if more work is needed
 
 **The task is NOT complete until you call `case_resolved`.**"""
 

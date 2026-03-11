@@ -70,38 +70,26 @@ Please address these suggestions in your research."""
 
             messages = [{"role": "user", "content": research_prompt}]
 
-            print("[DEBUG] BEFORE DEEP SURVEY")
             survey_messages, context_variables = await self.survey_agent(
                 messages, context_variables
             )
-            print("[DEBUG] AFTER DEEP SURVEY")
 
-            if not survey_messages:
-                continue
-
-            research_content = ""
-
-            for idx, msg in enumerate(survey_messages):
-                if msg.get("role") == "assistant" and msg.get("tool_calls"):
-                    for tc in msg.get("tool_calls", []):
-                        func_name = tc.get("function", {}).get("name", "")
-                        if func_name == "case_resolved":
-                            if idx > 0:
-                                prev_msg = survey_messages[idx - 1]
-                                if prev_msg.get("role") == "assistant":
-                                    research_content = prev_msg.get("content", "")
-                            break
+            research_content = context_variables.get("final_research", "")
 
             if not research_content:
-                for msg in reversed(survey_messages):
-                    if msg.get("role") == "assistant":
-                        content = msg.get("content", "")
-                        if content:
-                            research_content = content
-                            break
-
-            if not research_content:
-                research_content = survey_messages[-1].get("content", "")
+                for idx, msg in enumerate(survey_messages):
+                    if msg.get("role") == "assistant" and msg.get("tool_calls"):
+                        for tc in msg.get("tool_calls", []):
+                            func_name = tc.get("function", {}).get("name", "")
+                            if func_name == "case_resolved":
+                                for j in range(idx - 1, -1, -1):
+                                    prev_msg = survey_messages[j]
+                                    if prev_msg.get("role") == "assistant":
+                                        content = prev_msg.get("content", "")
+                                        if content and len(content) > 100:
+                                            research_content = content
+                                            break
+                                break
 
             survey_res = research_content
 
@@ -115,8 +103,6 @@ Please address these suggestions in your research."""
                 break
 
             suggestion_text = suggestion_dict.get("suggestion", "")
-            
-            print("[DEBUG] context_variables :", context_variables)
 
         return {
             "survey_result": survey_res,

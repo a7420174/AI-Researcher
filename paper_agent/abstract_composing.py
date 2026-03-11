@@ -151,6 +151,7 @@ Output the revised abstract section incorporating all these improvements. Reply 
         return await self.gpt_client.chat(prompt=prompt)
 
     async def compose_section(self, target_paper: str, target_folder: str) -> str:
+        self.target_folder = target_folder
         checkpoint_dir = self.get_checkpoint_path(target_paper)
         os.makedirs(checkpoint_dir, exist_ok=True)
 
