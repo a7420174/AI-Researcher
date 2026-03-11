@@ -790,43 +790,46 @@ class MetaChain:
             self.logger.pretty_print_messages(message)
             history.append(json.loads(message.model_dump_json()))
 
+            def _is_completion_response(msg: Message) -> bool:
+                content = msg.content or ""
+                return "<fully_correct>" in content or "<result>" in content
+
             if enter_agent.tool_choice != "required":
                 if (
                     not message.tool_calls and active_agent.name == enter_agent.name
                 ) or not execute_tools:
                     self.logger.info("Ending turn.", title="End Turn", color="red")
                     break
-            else:
-                if (
-                    message.tool_calls
-                    and message.tool_calls[0].function.name
-                    in ["case_resolved", "case_not_resolved"]
-                ) or not execute_tools:
-                    self.logger.info(
-                        "Ending turn with case resolved/not resolved.",
-                        title="End Turn",
-                        color="red",
+            elif message.tool_calls and message.tool_calls[0].function.name in [
+                "case_resolved",
+                "case_not_resolved",
+            ]:
+                try:
+                    partial_response = self.handle_tool_calls(
+                        message.tool_calls,
+                        active_agent.functions,
+                        context_variables,
+                        debug,
+                        handle_mm_func=active_agent.handle_mm_func,
                     )
-                    try:
-                        partial_response = self.handle_tool_calls(
-                            message.tool_calls,
-                            active_agent.functions,
-                            context_variables,
-                            debug,
-                            handle_mm_func=active_agent.handle_mm_func,
+                    history.extend(partial_response.messages)
+                    context_variables.update(partial_response.context_variables)
+                    if not partial_response.messages[-1]["content"].startswith(
+                        "[Tool Call Error]"
+                    ):
+                        self.logger.info(
+                            "Ending turn with case resolved/not resolved.",
+                            title="End Turn",
+                            color="red",
                         )
-                        history.extend(partial_response.messages)
-                        context_variables.update(partial_response.context_variables)
-                        if not partial_response.messages[-1]["content"].startswith(
-                            "[Tool Call Error]"
-                        ):
-                            break
-                        else:
-                            continue
-                    except Exception as e:
-                        self.logger.info(f"Error: {e}", title="Error", color="red")
-                        history.append({"role": "error", "content": f"Error: {e}"})
                         break
+                except Exception as e:
+                    self.logger.info(f"Error: {e}", title="Error", color="red")
+                    history.append({"role": "error", "content": f"Error: {e}"})
+                    break
+            elif not execute_tools:
+                self.logger.info("Ending turn.", title="End Turn", color="red")
+                break
 
             if message.tool_calls:
                 try:
