@@ -1,9 +1,9 @@
 import json
-from typing import List, Optional, Dict, Any
+from typing import Optional, Dict, Any
 
 from research_agent.inno.tools.file_surfer_tool import with_env as with_env_file
 from research_agent.inno.environment.markdown_browser import RequestsMarkdownBrowser
-from research_agent.inno.types import Agent, Result
+from research_agent.inno.types import Agent
 
 from research_agent.inno.registry import (
     register_agent,
@@ -116,11 +116,9 @@ When finished, call `case_resolved` with:
 
 @register_agent("get_deep_survey_agent")
 def get_deep_survey_agent(model: str, **kwargs) -> Agent:
-    file_env = kwargs.get("file_env")
+    file_env: Optional[RequestsMarkdownBrowser] = kwargs.get("file_env")
     if file_env is None:
         raise ValueError("file_env is required")
-
-    file_env: RequestsMarkdownBrowser = file_env
 
     tool_names = [
         "biomcp_article_search",

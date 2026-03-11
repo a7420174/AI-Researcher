@@ -775,45 +775,30 @@ class MetaChain:
             self.logger.pretty_print_messages(message)
             history.append(json.loads(message.model_dump_json()))
 
-            if enter_agent.tool_choice != "required":
-                if (
-                    not message.tool_calls and active_agent.name == enter_agent.name
-                ) or not execute_tools:
+            if not message.tool_calls:
+                if not execute_tools:
                     self.logger.info("Ending turn.", title="End Turn", color="red")
                     break
+                partial_response = Response(
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": "Please use the tools provided to complete the task.",
+                        }
+                    ]
+                )
             else:
-                if (
-                    message.tool_calls
-                    and message.tool_calls[0].function.name
+                if enter_agent.tool_choice == "required" and any(
+                    tc.get("function", {}).get("name", "")
                     in ["case_resolved", "case_not_resolved"]
-                ) or not execute_tools:
+                    for tc in message.tool_calls
+                ):
                     self.logger.info(
                         "Ending turn with case resolved/not resolved.",
                         title="End Turn",
                         color="red",
                     )
-                    try:
-                        partial_response = self.handle_tool_calls(
-                            message.tool_calls,
-                            active_agent.functions,
-                            context_variables,
-                            debug,
-                            handle_mm_func=active_agent.handle_mm_func,
-                        )
-                        history.extend(partial_response.messages)
-                        context_variables.update(partial_response.context_variables)
-                        if not partial_response.messages[-1]["content"].startswith(
-                            "[Tool Call Error]"
-                        ):
-                            break
-                        else:
-                            continue
-                    except Exception as e:
-                        self.logger.info(f"Error: {e}", title="Error", color="red")
-                        history.append({"role": "error", "content": f"Error: {e}"})
-                        break
 
-            if message.tool_calls:
                 try:
                     partial_response = self.handle_tool_calls(
                         message.tool_calls,
@@ -826,15 +811,16 @@ class MetaChain:
                     self.logger.info(f"Error: {e}", title="Error", color="red")
                     history.append({"role": "error", "content": f"Error: {e}"})
                     break
-            else:
-                partial_response = Response(
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": "Please use the tools provided to complete the task.",
-                        }
-                    ]
-                )
+
+                if enter_agent.tool_choice == "required" and any(
+                    tc.get("function", {}).get("name", "")
+                    in ["case_resolved", "case_not_resolved"]
+                    for tc in message.tool_calls
+                ):
+                    if not partial_response.messages[-1]["content"].startswith(
+                        "[Tool Call Error]"
+                    ):
+                        break
             history.extend(partial_response.messages)
             context_variables.update(partial_response.context_variables)
             if partial_response.agent:

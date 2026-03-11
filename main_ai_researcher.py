@@ -47,7 +47,7 @@ def get_args_research():
     parser.add_argument("--workplace_name", type=str, default="workplace")
     parser.add_argument("--cache_path", type=str, default="cache")
     parser.add_argument("--port", type=int, default=12345)
-    parser.add_argument("--max_iter_times", type=int, default=0)
+    parser.add_argument("--max_iter_times", type=int, default=3)
     parser.add_argument("--use_docker", type=bool, default=True)
     args = parser.parse_args()
     return args
@@ -136,7 +136,7 @@ def main_ai_researcher(
     workplace_name = os.getenv("WORKPLACE_NAME")
     cache_path = os.getenv("CACHE_PATH")
     port = int(os.getenv("PORT"))
-    max_iter_times = int(os.getenv("MAX_ITER_TIMES"))
+    max_iter_times = int(os.getenv("MAX_ITER_TIMES", "3"))
     if use_docker is None:
         use_docker = os.getenv("USE_DOCKER", "true").lower() == "true"
 

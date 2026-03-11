@@ -43,26 +43,30 @@ class DeepResearchFlow(FlowModule):
     async def forward(
         self,
         topic: Optional[str] = None,
-        max_iter_times: int = 1,
+        max_iter_times: int = 3,
         *args,
         **kwargs,
     ):
         context_variables = {}
 
-        MAX_ITER_TIMES = max_iter_times
+        MAX_ITER_TIMES = max_iter_times if max_iter_times > 0 else 3
         survey_res = ""
         suggestion_text = ""
 
         for i in range(MAX_ITER_TIMES):
-            # 이전 iteration의 suggestion을 현재 프롬프트에 포함
-            suggestion_prefix = (
-                f"\n\nPrevious iteration suggestions:\n{suggestion_text}\n\nPlease address these suggestions in your research.\n"
-                if suggestion_text
-                else ""
-            )
-            research_prompt = f"""Please perform comprehensive research on the following topic:
+            if i == 0:
+                research_prompt = f"""Please perform comprehensive research on the following topic:
 
-Topic: {topic}{suggestion_prefix}"""
+Topic: {topic}"""
+            else:
+                research_prompt = f"""Please perform comprehensive research on the following topic:
+
+Topic: {topic}
+
+Previous iteration suggestions:
+{suggestion_text}
+
+Please address these suggestions in your research."""
 
             messages = [{"role": "user", "content": research_prompt}]
 
@@ -74,14 +78,12 @@ Topic: {topic}{suggestion_prefix}"""
                 continue
 
             research_content = ""
-            has_case_resolved = False
 
             for idx, msg in enumerate(survey_messages):
                 if msg.get("role") == "assistant" and msg.get("tool_calls"):
                     for tc in msg.get("tool_calls", []):
                         func_name = tc.get("function", {}).get("name", "")
                         if func_name == "case_resolved":
-                            has_case_resolved = True
                             if idx > 0:
                                 prev_msg = survey_messages[idx - 1]
                                 if prev_msg.get("role") == "assistant":
@@ -101,14 +103,13 @@ Topic: {topic}{suggestion_prefix}"""
 
             survey_res = research_content
 
-            if not has_case_resolved:
-                continue
-
-            # suggestion 추출 - fully_correct가 false면 suggestion을 다음 iteration에 전달
             suggestion_dict = context_variables.get("suggestion_dict", {})
             fully_correct = suggestion_dict.get("fully_correct", False)
 
             if fully_correct and survey_res:
+                break
+
+            if i >= MAX_ITER_TIMES - 1:
                 break
 
             suggestion_text = suggestion_dict.get("suggestion", "")
@@ -185,7 +186,7 @@ def main(topic: str, max_iter_times: int = 1):
     # Save related papers search results to JSON for paper_agent
     related_papers_data = {
         "topic": topic,
-        "search_results": result.get("related_papers_search", ""),
+        "search_results": result.get("citations", ""),
     }
     with open(
         os.path.join(agent_dir, "related_papers.json"), "w", encoding="utf-8"
