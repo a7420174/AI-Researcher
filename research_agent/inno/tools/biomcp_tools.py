@@ -145,18 +145,14 @@ def biomcp_article_search(
 @register_tool("biomcp_article_get")
 def biomcp_article_get(
     id: str,
-    section: Optional[str] = None,
 ) -> str:
     """
     Retrieve article details by PubMed ID.
 
     Args:
         id: PubMed ID (PMID)
-        section: Optional section (e.g., "all")
     """
     args = ["get", "article", id]
-    if section:
-        args.append(section)
 
     return _run_biomcp_command(args)
 
