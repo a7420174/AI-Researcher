@@ -41,6 +41,42 @@ class DeepResearchFlow(FlowModule):
             cache_path,
         )
 
+    def _extract_function_result(self, survey_messages: list) -> tuple[str, str]:
+        """Extract research result or suggestions from tool calls."""
+        for msg in survey_messages:
+            if msg.get("role") != "assistant" or not msg.get("tool_calls"):
+                continue
+
+            for tc in msg.get("tool_calls", []):
+                func = tc.get("function", {})
+                func_name = func.get("name", "")
+                func_args = func.get("arguments", "")
+
+                try:
+                    args = (
+                        json.loads(func_args)
+                        if isinstance(func_args, str)
+                        else func_args
+                    )
+                except:
+                    continue
+
+                if func_name == "case_resolved":
+                    return args.get("research_result", ""), ""
+                elif func_name == "case_not_resolved":
+                    return "", args.get("suggestions", "")
+
+        return "", ""
+
+    def _fallback_extract(self, survey_messages: list) -> str:
+        """Fallback: extract research content from messages."""
+        for msg in reversed(survey_messages):
+            if msg.get("role") == "assistant" and not msg.get("tool_calls"):
+                content = msg.get("content", "")
+                if content and len(content) > 50:
+                    return content
+        return ""
+
     async def forward(
         self,
         topic: Optional[str] = None,
@@ -75,47 +111,19 @@ Please address these suggestions in your research."""
                 messages, context_variables
             )
 
-            research_content = context_variables.get("final_research", "")
+            survey_res, suggestion_text = self._extract_function_result(survey_messages)
 
-            if not research_content:
+            if survey_res:
+                break
+
+            if i >= MAX_ITER_TIMES - 1 and not survey_res:
                 self.logger.info(
-                    "final_research not found in context_variables. "
-                    "Falling back to message extraction - result may be incomplete.",
+                    "Could not extract research result after max iterations. "
+                    "Using fallback message extraction.",
                     title="Warning",
                     color="yellow",
                 )
-                case_resolved_idx = None
-                for idx, msg in enumerate(survey_messages):
-                    if msg.get("role") == "assistant" and msg.get("tool_calls"):
-                        for tc in msg.get("tool_calls", []):
-                            func_name = tc.get("function", {}).get("name", "")
-                            if func_name == "case_resolved":
-                                case_resolved_idx = idx
-                                break
-                    if case_resolved_idx is not None:
-                        break
-
-                if case_resolved_idx is not None:
-                    for j in range(case_resolved_idx - 1, -1, -1):
-                        msg = survey_messages[j]
-                        if msg.get("role") == "assistant":
-                            content = msg.get("content", "")
-                            if content and len(content) > 100:
-                                research_content = content
-                                break
-
-            survey_res = research_content
-
-            suggestion_dict = context_variables.get("suggestion_dict", {})
-            fully_correct = suggestion_dict.get("fully_correct", False)
-
-            if fully_correct and survey_res:
-                break
-
-            if i >= MAX_ITER_TIMES - 1:
-                break
-
-            suggestion_text = suggestion_dict.get("suggestion", "")
+                survey_res = self._fallback_extract(survey_messages)
 
         return {
             "survey_result": survey_res,

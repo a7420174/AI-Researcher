@@ -11,29 +11,24 @@ from research_agent.inno.registry import (
 )
 
 
-def case_resolved(
-    context_variables: dict,
-    fully_correct: bool,
-    suggestion: Optional[Dict[str, str]] = None,
-) -> str:
+def case_resolved(research_result: str) -> str:
     """
-    Use this function when you have finished the task.
+    Use this function when you have completed the research task with satisfactory results.
 
     Args:
-       context_variables: Must contain "final_research" key with the research summary
-       fully_correct: whether the implementation/response is fully correct
-       suggestion: dict {key_point: suggestion}. If fully_correct, set to None
+        research_result: The complete research summary and findings.
     """
-    suggestion_dict: Dict[str, Any] = {
-        "fully_correct": fully_correct,
-    }
+    return research_result
 
-    if suggestion:
-        suggestion_dict["suggestion"] = suggestion
 
-    context_variables["suggestion_dict"] = suggestion_dict
+def case_not_resolved(suggestions: str) -> str:
+    """
+    Use this function when the research is incomplete and you need to provide suggestions for improvement.
 
-    return "[DONE]"
+    Args:
+        suggestions: Suggestions for what needs to be done to complete the research.
+    """
+    return suggestions
 
 
 DEEP_SURVEY_AGENT_INSTRUCTIONS = """You are a `Deep Survey Agent` specialized in comprehensive research with verification.
@@ -106,28 +101,17 @@ DEEP_SURVEY_AGENT_INSTRUCTIONS = """You are a `Deep Survey Agent` specialized in
 - Papers from `biomcp_article_search` and `openalex_search` that are verified as topic-related should be prominently included in your final results 
 
 ## MANDATORY TERMINATION
-**You MUST call the `case_resolved` function when you have finished the task.**
 
-CRITICAL - Two-Step Process:
-1. **FIRST**: Output your COMPLETE research summary as TEXT CONTENT in your response
-2. **THEN** (in next turn): Call `case_resolved(fully_correct=True)` to complete the task
+When you have completed the research:
+- Call `case_resolved(research_result="your complete research summary here")` 
 
-**IMPORTANT**: 
-- You must output the research summary as TEXT first, then call case_resolved
-- Do NOT call case_resolved in the same response as your research summary
-- Do NOT just say "Let me compile..." - actually output the full research content
-- The text content you output will be used as the final result
+When the research is incomplete:
+- Call `case_not_resolved(suggestions="what needs to be done to complete the research")` 
 
-Example workflow:
-```
-Turn 1: [Assistant] Here's my research summary: ... (full research content)...
-Turn 2: [Assistant] case_resolved(fully_correct=True)
-```
-
-When research is complete:
-- First output your full research summary as text
-- Then call `case_resolved(fully_correct=True)` in the next turn
-- Or call `case_resolved(fully_correct=False, suggestion={...})` if more work is needed"""
+**IMPORTANT**:
+- Pass your complete research summary directlyolved(research_result to `case_res=...)`
+- Do NOT call case_resolved with empty or placeholder content
+- Include key findings, citations, and conclusions in the research_result"""
 
 
 @register_agent("get_deep_survey_agent")
@@ -174,7 +158,7 @@ def get_deep_survey_agent(model: str, **kwargs) -> Agent:
         name="Deep Survey Agent",
         model=model,
         instructions=DEEP_SURVEY_AGENT_INSTRUCTIONS,
-        functions=tools + [case_resolved],
+        functions=tools + [case_resolved, case_not_resolved],
         tool_choice="required",
     )
 
