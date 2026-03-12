@@ -84,18 +84,24 @@ Please address these suggestions in your research."""
                     title="Warning",
                     color="yellow",
                 )
+                case_resolved_idx = None
                 for idx, msg in enumerate(survey_messages):
                     if msg.get("role") == "assistant" and msg.get("tool_calls"):
                         for tc in msg.get("tool_calls", []):
                             func_name = tc.get("function", {}).get("name", "")
                             if func_name == "case_resolved":
-                                for j in range(idx - 1, -1, -1):
-                                    prev_msg = survey_messages[j]
-                                    if prev_msg.get("role") == "assistant":
-                                        content = prev_msg.get("content", "")
-                                        if content and len(content) > 100:
-                                            research_content = content
-                                            break
+                                case_resolved_idx = idx
+                                break
+                    if case_resolved_idx is not None:
+                        break
+
+                if case_resolved_idx is not None:
+                    for j in range(case_resolved_idx - 1, -1, -1):
+                        msg = survey_messages[j]
+                        if msg.get("role") == "assistant":
+                            content = msg.get("content", "")
+                            if content and len(content) > 100:
+                                research_content = content
                                 break
 
             survey_res = research_content

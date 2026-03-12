@@ -108,24 +108,26 @@ DEEP_SURVEY_AGENT_INSTRUCTIONS = """You are a `Deep Survey Agent` specialized in
 ## MANDATORY TERMINATION
 **You MUST call the `case_resolved` function when you have finished the task.**
 
-CRITICAL: Before calling `case_resolved`, you MUST store your COMPLETE research summary in `context_variables["final_research"]`.
-
-Example:
-```
-context_variables["final_research"] = "Your full research summary here with all findings and citations"
-case_resolved(fully_correct=True)
-```
+CRITICAL - Two-Step Process:
+1. **FIRST**: Output your COMPLETE research summary as TEXT CONTENT in your response
+2. **THEN** (in next turn): Call `case_resolved(fully_correct=True)` to complete the task
 
 **IMPORTANT**: 
-- The content in `context_variables["final_research"]` will be used as the final output
-- Do NOT call `case_resolved` before storing the research summary
-- Do NOT just say "Let me compile..." - actually store the full research
+- You must output the research summary as TEXT first, then call case_resolved
+- Do NOT call case_resolved in the same response as your research summary
+- Do NOT just say "Let me compile..." - actually output the full research content
+- The text content you output will be used as the final result
 
-Then call:
-- `case_resolved(fully_correct=True)` when research is complete
-- `case_resolved(fully_correct=False, suggestion={...})` if more work is needed
+Example workflow:
+```
+Turn 1: [Assistant] Here's my research summary: ... (full research content)...
+Turn 2: [Assistant] case_resolved(fully_correct=True)
+```
 
-**The task is NOT complete until you call `case_resolved`.**"""
+When research is complete:
+- First output your full research summary as text
+- Then call `case_resolved(fully_correct=True)` in the next turn
+- Or call `case_resolved(fully_correct=False, suggestion={...})` if more work is needed"""
 
 
 @register_agent("get_deep_survey_agent")
