@@ -31,6 +31,7 @@ class DeepResearchFlow(FlowModule):
     ):
         super().__init__(cache_path, log_path, model)
         self.file_env = file_env
+        self.logger = self.client.logger
 
         get_deep_survey_agent = get_agent_factory("get_deep_survey_agent")
 
@@ -77,6 +78,12 @@ Please address these suggestions in your research."""
             research_content = context_variables.get("final_research", "")
 
             if not research_content:
+                self.logger.info(
+                    "final_research not found in context_variables. "
+                    "Falling back to message extraction - result may be incomplete.",
+                    title="Warning",
+                    color="yellow",
+                )
                 for idx, msg in enumerate(survey_messages):
                     if msg.get("role") == "assistant" and msg.get("tool_calls"):
                         for tc in msg.get("tool_calls", []):

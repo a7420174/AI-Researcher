@@ -108,10 +108,18 @@ DEEP_SURVEY_AGENT_INSTRUCTIONS = """You are a `Deep Survey Agent` specialized in
 ## MANDATORY TERMINATION
 **You MUST call the `case_resolved` function when you have finished the task.**
 
-BEFORE calling `case_resolved`, you MUST store your final research summary in `context_variables`:
-```python
-context_variables["final_research"] = "Your comprehensive research summary here..."
+CRITICAL: Before calling `case_resolved`, you MUST store your COMPLETE research summary in `context_variables["final_research"]`.
+
+Example:
 ```
+context_variables["final_research"] = "Your full research summary here with all findings and citations"
+case_resolved(fully_correct=True)
+```
+
+**IMPORTANT**: 
+- The content in `context_variables["final_research"]` will be used as the final output
+- Do NOT call `case_resolved` before storing the research summary
+- Do NOT just say "Let me compile..." - actually store the full research
 
 Then call:
 - `case_resolved(fully_correct=True)` when research is complete
