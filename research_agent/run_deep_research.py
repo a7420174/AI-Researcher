@@ -131,13 +131,14 @@ Please address these suggestions in your research."""
         }
 
 
-def main(topic: str, max_iter_times: int = 1):
+def main(topic: str, max_iter_times: int = 1, project_root: str = None):
     """
     Main entry point for Deep Research using Agent.
 
     Args:
         topic: The research topic/question
         max_iter_times: Maximum of iteration times
+        project_root: Override project root path
 
     Returns:
         dict: Contains 'result' (research findings) and project paths
@@ -147,7 +148,10 @@ def main(topic: str, max_iter_times: int = 1):
 
     instance_id = f"deep_research"
 
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if project_root:
+        project_root = project_root
+    else:
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     local_root = os.path.join(
         project_root,
         "workplace_paper",

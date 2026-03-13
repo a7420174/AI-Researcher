@@ -49,6 +49,7 @@ def get_args_research():
     parser.add_argument("--port", type=int, default=12345)
     parser.add_argument("--max_iter_times", type=int, default=3)
     parser.add_argument("--use_docker", type=bool, default=True)
+    parser.add_argument("--project_root", type=str, default=None)
     args = parser.parse_args()
     return args
 
@@ -129,7 +130,7 @@ def _find_references_for_topic(topic: str) -> str:
 
 
 def main_ai_researcher(
-    input, reference, mode, research_field="general", use_docker=None
+    input, reference, mode, research_field="general", use_docker=None, project_root=None
 ):
     load_dotenv()
     container_name = os.getenv("CONTAINER_NAME")
@@ -195,6 +196,7 @@ def main_ai_researcher(
                 args.use_conda = False
                 args.uv_path = None
                 args.venv_path = None
+                args.project_root = project_root
 
                 project_info = rp_module.main(
                     args, input, found_reference or reference, input
@@ -250,6 +252,7 @@ def main_ai_researcher(
                 args.port = port
                 args.max_iter_times = max_iter_times
                 args.use_docker = use_docker
+                args.project_root = project_root
 
                 project_info = run_infer_idea.main(
                     args, found_reference or reference, input
@@ -282,7 +285,9 @@ def main_ai_researcher(
                 from constant import COMPLETION_MODEL
 
                 result_info = run_deep_research.main(
-                    topic=input, max_iter_times=max_iter_times
+                    topic=input,
+                    max_iter_times=max_iter_times,
+                    project_root=project_root,
                 )
 
                 # Handle both old string return and new dict return
@@ -359,9 +364,19 @@ if __name__ == "__main__":
         default="general",
         help="Research field for paper writing (default: general)",
     )
+    parser.add_argument(
+        "--project_root",
+        type=str,
+        default=None,
+        help="Project root path (default: auto-detect)",
+    )
     args = parser.parse_args()
 
     result = main_ai_researcher(
-        args.input, args.reference, args.mode, args.research_field
+        args.input,
+        args.reference,
+        args.mode,
+        args.research_field,
+        project_root=args.project_root,
     )
     print(f"Result: {result}")

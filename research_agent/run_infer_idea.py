@@ -642,7 +642,10 @@ def main(args, references, task_instructions=None):
     instance_id = "query_based"
 
     # Get project root (parent of research_agent)
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if hasattr(args, "project_root") and args.project_root:
+        project_root = args.project_root
+    else:
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     local_root = os.path.join(
         project_root,
         "workplace_paper",
